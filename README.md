@@ -6,11 +6,15 @@ Given a natural-language query and a library of code snippets, this project retu
 
 | Phase | Scope | State |
 |---|---|---|
-| 1 | Dense-only baseline (jina-embeddings-v2-base-code + FAISS) and MTEB evaluation | Implemented. The first full evaluation run was still in progress when this was written, so no baseline score is recorded here yet. |
+| 1 | Dense-only baseline (bge-small-en-v1.5 + FAISS) and MTEB evaluation | Implemented and evaluated. AppsRetrieval test split: **NDCG@10 0.0564, MRR@10 0.0482** (Recall@10 0.083, Recall@100 0.197). |
 | 2 | BM25, RRF fusion, cross-encoder reranker | Components built and tested on a toy corpus (`scripts/test_phase2_pipeline.py`). **Not yet wired into the MTEB evaluation.** |
 | 3 | Tree-sitter parsing and call-graph queries | Stub modules only |
 | 4 | Content-addressed incremental re-indexing across versions | Stub modules only |
 | 5 | Lineage-aware retrieval across all versions | Stub modules only |
+
+## Presentation
+
+The project presentation is in the repository root: [VIT_Vellore_Shard_Submission.pptx](VIT_Vellore_Shard_Submission.pptx).
 
 ## Setup
 
@@ -25,8 +29,9 @@ pip install -r requirements.txt
 
 Environment notes:
 
-- **`transformers` must stay below version 5.** The custom model code shipped with `jina-embeddings-v2-base-code` fails to import on transformers 5.x (`find_pruneable_heads_and_indices`). `requirements.txt` pins `transformers>=4.44,<5` and `sentence-transformers>=5,<6`. `einops` is also required by that model.
-- If the jina model cannot be loaded, the encoder logs a warning and falls back to `BAAI/bge-small-en-v1.5`. The model actually used is printed at the start of a run, so check it before trusting a result.
+- The default embedding model is `BAAI/bge-small-en-v1.5`. Queries are encoded with the recommended instruction prefix; documents are not.
+- `jinaai/jina-embeddings-v2-base-code` can still be used with `--model`, but it was far too slow on CPU for the full evaluation (over two hours without finishing on our machine), so the reported baseline does not use it. If you use it, `transformers` must stay below version 5: the custom model code fails to import on 5.x (`find_pruneable_heads_and_indices`). `requirements.txt` pins `transformers>=4.44,<5` and `sentence-transformers>=5,<6`, and `einops` is needed only for jina.
+- The model actually used is printed at the start of a run.
 - The reranker (`BAAI/bge-reranker-base`) loads with the same pins; `cross-encoder/ms-marco-MiniLM-L-6-v2` is the fallback.
 - On Windows you may see warnings about Hugging Face cache symlinks. They are harmless.
 
@@ -38,7 +43,7 @@ python scripts/run_eval.py
 
 This runs the MTEB `AppsRetrieval` task on its test split (8,765 corpus documents and 3,765 queries) and writes `results/appsretrieval_results.json`, following the submission snippet in the hackathon guidelines. The script prints the NDCG@10 at the end. Options: `--model`, `--max-seq-length` (default 512), `--batch-size` (default 64) and `--out`.
 
-**Expected run time on CPU: long.** Nearly every query is a long problem statement (mean about 1,700 characters) and is truncated at 512 tokens, so encoding is expensive. On a 14-core, 18-thread Windows laptop, the first run was still going after more than an hour and had not finished. Plan for one to several hours and do not expect a quick run. The script shows no progress bar while encoding.
+**Expected run time on CPU:** about 29 minutes with `bge-small-en-v1.5` on a 14-core, 18-thread Windows laptop (roughly 16 minutes of that encoding the corpus). Nearly every query is a long problem statement (mean about 500 tokens), so queries are the costly part; 42% of them exceed the 512-token limit and are truncated. A progress bar is shown while encoding.
 
 Note: MTEB 2.x stores a `datetime` in the task result, which the plain `json.dump(task_result.to_dict(), ...)` from the guidelines cannot serialise. The script converts it to a timestamp, as MTEB's own `to_disk` does.
 
@@ -77,7 +82,7 @@ results/                evaluation output (JSON git-ignored)
 
 | Component | Choice | Why |
 |---|---|---|
-| Embeddings | `jinaai/jina-embeddings-v2-base-code` (fallback `BAAI/bge-small-en-v1.5`) | Code-aware dense embeddings with an 8k-token window; the general-purpose bge-small model is the comparison baseline |
+| Embeddings | `BAAI/bge-small-en-v1.5` (optional: `jinaai/jina-embeddings-v2-base-code`) | Small and fast enough to run the full evaluation on CPU in about half an hour. The code-specific jina model has a longer window but was too slow on CPU |
 | Vector search | FAISS `IndexIDMap` over a flat inner-product index | Local, no server, and vectors can be added or removed by id, which incremental indexing across versions needs |
 | Sparse search | `rank_bm25` | Catches exact identifier and keyword matches that dense embeddings miss |
 | Fusion | Reciprocal Rank Fusion, hand-written | Simple, standard way to combine dense and BM25 rankings |
