@@ -17,7 +17,7 @@ from src.mteb_encoder import PrePostPipelineEncoder  # noqa: E402
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--model", default="jinaai/jina-embeddings-v2-base-code")
+    ap.add_argument("--model", default="BAAI/bge-small-en-v1.5")
     ap.add_argument("--max-seq-length", type=int, default=512)
     ap.add_argument("--batch-size", type=int, default=64)
     ap.add_argument("--out", default=str(ROOT / "results" / "appsretrieval_results.json"))

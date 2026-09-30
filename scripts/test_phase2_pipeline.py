@@ -40,7 +40,7 @@ def main():
 
     for q in QUERIES:
         print(f"\nQuery: {q}")
-        qv = enc.model.encode([q], normalize_embeddings=True)
+        qv = enc.model.encode([enc.query_prefix + q], normalize_embeddings=True)
         sc, ids = dense.search(qv, k=5)
         d_res = [(int(i), float(s)) for s, i in zip(sc[0], ids[0]) if i != -1]
         s_res = sparse.search(q, 5)
