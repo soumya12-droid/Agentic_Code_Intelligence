@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+.venv/
+data/*
+!data/.gitkeep
+*.faiss
+*.index
+results/*.json
+*.pkl
+.cache/

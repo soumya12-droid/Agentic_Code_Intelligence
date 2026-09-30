@@ -1,0 +1,19 @@
+# Phase 1 (dense-only baseline)
+mteb>=2.21,<3
+sentence-transformers>=5.0,<6
+torch>=2.4
+transformers>=4.44,<5   # jina-v2-code remote code breaks on transformers 5.x
+faiss-cpu>=1.13
+numpy>=2.0
+# jina-embeddings-v2-base-code needs custom code + these:
+einops>=0.8
+
+# Phase 2 (hybrid + rerank)
+rank-bm25==0.2.2
+
+# Phase 3/4 (structural + versioning)
+tree-sitter>=0.25
+tree-sitter-javascript>=0.25
+
+# Later phases, not needed yet:
+# (sqlite3 is stdlib)
