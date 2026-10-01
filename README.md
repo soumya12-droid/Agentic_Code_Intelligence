@@ -38,9 +38,42 @@ The benchmark outputs are in `results/ablation/benchmarks/` and the code is stil
 |---|---|---|
 | 1 | Dense baseline (bge-small-en-v1.5 + FAISS) and MTEB evaluation | Done |
 | 2 | BM25, weighted RRF fusion, reranking experiments | Done. Weighted RRF shipped; rerankers evaluated and rejected |
-| 3 | Tree-sitter parsing and call-graph queries | Stub modules only |
+| 3 | Tree-sitter parsing and call-graph (structural) queries | Done on the sample repositories; separate from the graded evaluation (see "Structural queries") |
 | 4 | Content-addressed incremental re-indexing across versions | Stub modules only |
 | 5 | Lineage-aware retrieval across all versions | Stub modules only |
+
+## Structural queries (Phase 3)
+
+Some questions are about code structure, not meaning: "which functions call `normalize`?" is answered exactly by parsing the code, not by ranking text. This part of the project parses source files with tree-sitter (JavaScript and Python), builds a call graph in SQLite, and answers call-graph questions directly. A rule-based router sends short questions that match one of the patterns below to this engine and everything else to the semantic retrieval pipeline.
+
+| Pattern | Example question | What it returns |
+|---|---|---|
+| Callers | `Which functions call normalize?` | Every function that calls it, with file, line range and call lines |
+| Callees | `What does main call?` | The calls in its body in source order, and where each callee is defined |
+| Definition | `Where is Renderer.draw defined?` | File and line range of the definition |
+| Before | `Which functions call checkType before checkLength?` | Functions where a call to the first appears earlier in the source than a call to the second |
+| Transitive callers | `What directly or indirectly calls log?` | Everything that reaches it through calls, with the call distance |
+
+Results are functions with file and line, grouped by file.
+
+Run the demo (no model download needed):
+
+```bash
+python scripts/demo_structural.py                                        # example questions on both sample repos
+python scripts/demo_structural.py "Which functions call normalize?"      # your own question (JavaScript sample)
+python scripts/demo_structural.py --repo samples/py_repo "who calls check_type"
+python -m unittest discover -s tests -v                                  # 13 known-answer tests
+```
+
+In code: `from src.pipeline import answer` and `answer(query, db)`, where `db` is a `CallGraphDB` that has run `index_repo(path)`.
+
+**Scope.** This works on the sample repositories (`samples/js_repo`, 10 files and 27 definitions, and `samples/py_repo`, 5 files and 14 definitions), not on the AppsRetrieval evaluation corpus. That corpus is 8,765 standalone competitive-programming solutions written in Python (only 16 of the 8,765 documents contain the JavaScript keyword `function`), with no cross-file structure, so a call-graph question about it would not mean anything. This phase therefore neither affects nor can affect the graded NDCG@10. It is a separate capability, shown in the demo. To check that it cannot interfere with the benchmark, the router was run over all 3,765 test queries: none is routed to the structural engine, with or without the length limit, while all 18 structural control questions route correctly (`results/ablation/structural_router_safety_check.json`, produced by `scripts/check_router_safety.py`).
+
+**Limits.**
+- Calls are matched by name. Two functions with the same name in different files, or a method and an unrelated function with the same name, are not told apart.
+- Dynamic calls such as `obj[fn]()` are not resolved. Simple import aliases (`import {a as b}`, `const {a: b} = require(...)`, `from m import a as b`) are.
+- A call inside a callback or lambda is attributed to the enclosing named function.
+- "X before Y" means static source order inside one function body. Branches and loops are not modelled, so it is not runtime execution order.
 
 ## Presentation
 
@@ -109,16 +142,20 @@ src/
     fusion.py           weighted Reciprocal Rank Fusion
   rerank/
     cross_encoder.py    cross-encoder reranker wrapper (evaluated, not in the shipped pipeline)
-  query/                classify.py, expand.py            query routing and expansion   (stub)
-  structural/           parse.py, callgraph.py            tree-sitter call graph        (stub)
+  query/                classify.py (structural vs semantic router, done), expand.py (stub)
+  structural/           parse.py (tree-sitter extractors for JavaScript and Python), callgraph.py (SQLite call graph and queries)
   versioning/           diff.py, index_store.py, lineage.py                             (stub)
-  pipeline.py           top-level orchestration                                         (stub)
+  pipeline.py           answer(query, db): routes a question and answers it (structural; semantic path is a hook)
 scripts/
   run_eval.py           MTEB AppsRetrieval evaluation with the shipped pipeline, writes the submission JSON
   run_phase2_eval.py    one ablation stage (dense / bm25 / rrf / rerank) with per-query scores and timing
   build_index.py        builds and saves a FAISS index over sample snippets
   test_phase2_pipeline.py   end-to-end check of the Phase 2 components on sample snippets
+  demo_structural.py    structural query demo on the sample repositories
+  check_router_safety.py  runs the router over the benchmark queries (result in results/ablation/)
   benchmark_reindex.py  full rebuild vs incremental re-index timing                     (stub)
+samples/                js_repo and py_repo fixtures for the structural queries
+tests/                  known-answer tests for the structural engine
 data/                   local data, indexes and the embedding cache (git-ignored)
 results/                appsretrieval_results.json (submission) and ablation/ (per-stage results)
 docs/PROJECT_PLAN.md    architecture and implementation plan
@@ -133,8 +170,8 @@ docs/PROJECT_PLAN.md    architecture and implementation plan
 | Sparse search | BM25 using `rank_bm25` statistics, with our own precomputed inverted index for scoring | `rank_bm25`'s own scoring loops over every document per query term, which is too slow for thousands of long queries; ours gives the same scores (to float precision) and scores the full query set in seconds |
 | Fusion | Weighted Reciprocal Rank Fusion, hand-written (dense 1.0, BM25 0.3) | Simple, standard way to combine rankings; weighting stops the weak BM25 signal from hurting the dense ranking |
 | Reranker | None in the shipped pipeline | `bge-reranker-base` was too slow on CPU and `ms-marco-MiniLM-L-6-v2` lowered NDCG@10; see "Evaluated but not used" |
-| Code parsing | `tree-sitter` with the JavaScript grammar | Function-level snippet extraction and call graphs (planned) |
-| Metadata | SQLite | Snippet and version bookkeeping (planned) |
+| Code parsing | `tree-sitter` with the JavaScript and Python grammars | Function-level extraction and call graphs for structural queries; also the basis for snippet hashing in the versioning phase |
+| Metadata | SQLite | Call graph and snippet metadata today; version bookkeeping planned |
 | Evaluation | `mteb`, `AppsRetrieval` task | Required submission format |
 
 The pipeline is plain Python with no orchestration framework.

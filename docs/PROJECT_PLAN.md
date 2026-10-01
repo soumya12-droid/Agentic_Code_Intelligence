@@ -232,9 +232,40 @@ properly" — solved structurally, not via a post-hoc similarity filter.
 7. Record ablation results at each step (dense-only → +BM25 → +rerank → +routing) for
    the PPT/demo — this is a differentiator, not optional polish.
 
-### Phase 3 — Structural queries
+### Phase 3 — Structural queries (complete)
 8. Implement tree-sitter-based snippet + call-graph extraction for JS.
 9. Implement structural query answering ("which files call X before Y").
+
+**Outcome.** Done per the Phase 3 criterion in section 8: structural query types return
+correct results on the sample codebases (13 known-answer tests, expected answers worked
+out by hand from the fixtures).
+
+- **Extractor.** One interface (`src/structural/parse.py`) with two tree-sitter backends,
+  JavaScript and Python. It records function, method and class definitions and, for each,
+  the calls in its body in source order. Top-level code is a pseudo-function `<module>`.
+  Simple import aliases are resolved (`import {a as b}`, `const {a: b} = require()`,
+  `from m import a as b`).
+- **Query patterns** (`src/query/classify.py`, rule-based): callers ("which functions call
+  X?"), callees ("what does X call?"), definition ("where is X defined?"), "X before Y"
+  ("which functions call X before Y?") and transitive callers ("what directly or
+  indirectly calls X?"). Results are functions with file and line, grouped by file.
+- **Storage** (`src/structural/callgraph.py`, SQLite). `snippets(id, snippet_id, name,
+  qualname, kind, language, file_path, line_start, line_end, content_hash, version_added,
+  version_removed)` follows the metadata shape of section 3.2 so Phase 4 can reuse it;
+  `calls(id, caller_id, callee_name, receiver, file_path, line, call_order)` has one row
+  per call site, ordered by source position within the caller.
+- **Routing safety.** The router only fires on short questions that match a pattern and
+  name functions. Run over all 3,765 AppsRetrieval test queries it routes 0 of them to
+  the structural engine, and still 0 with the length gate removed, while 18 of 18
+  positive control questions route correctly
+  (`results/ablation/structural_router_safety_check.json`).
+- **Scope.** Demonstrated on `samples/js_repo` and `samples/py_repo`, not the AppsRetrieval
+  corpus (standalone Python solutions with no cross-file structure), so this phase does not
+  affect the graded NDCG@10.
+- **Limits.** Calls are matched by name, so same-name functions in different files are not
+  told apart. Dynamic calls such as `obj[fn]()` are not resolved. A call inside a callback
+  is attributed to the enclosing function. "X before Y" is static source order within one
+  function body: branches and loops are not modelled, so it is not runtime execution order.
 
 ### Phase 4 — P1: versioning
 10. Implement content-hash-based snippet identity (`snippet_id = hash(normalized_code)`).
