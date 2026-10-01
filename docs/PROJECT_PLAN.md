@@ -267,12 +267,37 @@ out by hand from the fixtures).
   is attributed to the enclosing function. "X before Y" is static source order within one
   function body: branches and loops are not modelled, so it is not runtime execution order.
 
-### Phase 4 — P1: versioning
+### Phase 4 — P1: versioning (complete)
 10. Implement content-hash-based snippet identity (`snippet_id = hash(normalized_code)`).
 11. Implement version diffing (added/unchanged/modified/deleted classification).
 12. Implement incremental FAISS index updates (`IndexIDMap` add/remove).
 13. Implement metadata store (SQLite) for version ranges.
 14. Benchmark: full rebuild time vs incremental reindex time on a real diff. Record numbers.
+
+**Outcome.** Done per the Phase 4 criterion in section 8: a single-file change reindexes only the
+changed snippet (`tests/test_versioning.py` asserts 1 file parsed, 1 snippet encoded, 1 new
+vector, and the other rows and vectors untouched), with benchmark numbers recorded. The README
+section "Versioning (Phase 4)" has the full description and the numbers; the decisions are:
+
+- **Normalised code** is the syntax tree: the hash covers every node type and the exact text of
+  every token, so it ignores whitespace, blank lines and line wrapping but not structure (moving a
+  Python statement into an `if` block changes it) or any token. **Comments count as changes** by
+  default, because the embedded text includes them and a stale vector would otherwise survive a
+  docstring edit; `strip_comments` turns that off and is off by default.
+- **A snippet** is a function or method, or a file's module-level code (the file minus its
+  definitions). Identity across versions uses the logical key (file, qualified name, occurrence
+  index), because content addressing alone cannot link an edited function's old hash to its new one.
+- **Re-embedding cost.** Unchanged: none (formatting-only edits included). Moved to another file
+  with identical code: none, the vector is reused. Modified or added: one, unless that exact code
+  already has a vector (a duplicate, a reverted edit). **A rename costs one embedding**, since the
+  name is part of the code. Deleted: none (soft delete).
+- **Storage.** SQLite `snippets` (the section 3.2 columns plus the logical key), `versions`,
+  `lineage` (old snippet to the snippet that replaced it, for Phase 5), `files` and `snippet_text`;
+  FAISS `IndexIDMap` with vector ids derived from the content hash, soft deletes via
+  `version_removed`, and `vacuum()` for physical removal.
+- **Search as of a version** (`search(query, as_of="v1")`) restricts dense search to the vectors
+  valid in that version with a FAISS `IDSelector`. This is the filter primitive only; lineage
+  grouping and cross-version de-duplication belong to Phase 5.
 
 ### Phase 5 — Bonus: evolutionary retrieval
 15. Implement lineage tracking (chains of `snippet_id`s representing edits to the same
