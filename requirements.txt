@@ -14,6 +14,7 @@ rank-bm25==0.2.2
 # Phase 3/4 (structural + versioning)
 tree-sitter>=0.25
 tree-sitter-javascript>=0.25
+tree-sitter-python>=0.25
 
 # Later phases, not needed yet:
 # (sqlite3 is stdlib)
