@@ -1,4 +1,4 @@
-# Phase 1 (dense-only baseline)
+# Shipped pipeline: dense (bge-small-en-v1.5) + BM25 + weighted RRF
 mteb>=2.21,<3
 sentence-transformers>=5.0,<6
 torch>=2.4
@@ -8,7 +8,7 @@ numpy>=2.0
 # only needed for the optional jina-embeddings-v2-base-code model (default is bge-small-en-v1.5):
 einops>=0.8
 
-# Phase 2 (hybrid + rerank)
+# BM25 (cross-encoder reranker code uses sentence-transformers above; evaluated, not shipped)
 rank-bm25==0.2.2
 
 # Phase 3/4 (structural + versioning)

@@ -7,7 +7,9 @@ from sentence_transformers import CrossEncoder
 
 logger = logging.getLogger(__name__)
 
-PRIMARY_MODEL = "BAAI/bge-reranker-base"
+# MiniLM is the shipped reranker. BAAI/bge-reranker-base was benchmarked but is too slow on
+# CPU for the full split (about 11 s/query at 20 candidates); select it with model_name.
+PRIMARY_MODEL = "cross-encoder/ms-marco-MiniLM-L-6-v2"
 FALLBACK_MODEL = "cross-encoder/ms-marco-MiniLM-L-6-v2"
 
 
