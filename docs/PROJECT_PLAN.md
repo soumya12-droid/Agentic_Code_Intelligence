@@ -166,11 +166,11 @@ properly" — solved structurally, not via a post-hoc similarity filter.
 
 | Component | Choice | Why |
 |---|---|---|
-| Embedding model | `jina-embeddings-v2-base-code` or `CodeBERT`/`GraphCodeBERT` (benchmark against `bge-small-en` as a general-purpose baseline) | Code-aware embeddings outperform general text embeddings on code retrieval; benchmark locally before committing |
-| Sparse retrieval | `rank_bm25` (or OpenSearch/Elasticsearch if scale demands it) | Catches exact identifier/keyword matches dense embeddings miss |
-| Fusion | Reciprocal Rank Fusion (RRF), hand-rolled (simple, no dependency needed) | Standard, effective combination of dense + sparse ranked lists |
+| Embedding model | `bge-small-en-v1.5` (used). `jina-embeddings-v2-base-code` was tried but was too slow on CPU: the full AppsRetrieval run had not finished after more than 2 hours, against about 22 minutes for bge-small | The code-specific model could not run the full split on CPU in reasonable time |
+| Sparse retrieval | BM25 using `rank_bm25` statistics, with a precomputed inverted index for fast scoring | Catches exact identifier/keyword matches dense embeddings miss. `rank_bm25`'s own `get_scores` is too slow for thousands of long queries |
+| Fusion | Weighted Reciprocal Rank Fusion (RRF), hand-rolled: dense weight 1.0, BM25 weight 0.3 | Equal weights lowered NDCG@10 below dense-only (0.0540 vs 0.0564) because BM25 is weak on this dataset; weighting BM25 as a secondary signal gives 0.0597 |
 | Vector store | FAISS, `IndexIDMap` wrapper | Local, no server dependency, supports incremental add/remove needed for P1 |
-| Reranker | `bge-reranker-base` or `ms-marco-MiniLM` cross-encoder | CPU-fast, typically the largest single lever on NDCG@10 |
+| Reranker | None in the shipped pipeline. Evaluated and rejected: `bge-reranker-base` (too slow on CPU, about 11 s per query at 20 candidates, an estimated 11.6 h for the full split) and `ms-marco-MiniLM-L-6-v2` (full split, top 15: NDCG@10 fell from 0.0597 to 0.0528, 95% CI of the change -0.0108 to -0.0025; reranking took 134 min) | The MiniLM drop was not investigated. A hypothesis, unverified: its web-passage training does not transfer to code retrieval, especially with long queries using up the 512-token window |
 | Code parsing | `tree-sitter` (JS grammar) | Function/block-level extraction + call-graph construction for structural queries and P1 diffing |
 | Metadata store | SQLite | Lightweight, sufficient for snippet/version bookkeeping, no server needed |
 | Eval | `mteb` library, `AbsEncoder` subclass wrapping the full pipeline, `AppsRetrieval` task | Required submission format per hackathon spec |
@@ -226,7 +226,8 @@ properly" — solved structurally, not via a post-hoc similarity filter.
 
 ### Phase 2 — Hybrid + rerank (P0 improvement)
 4. Add BM25 sparse retrieval + RRF fusion → re-measure.
-5. Add cross-encoder reranker over fused top-k → re-measure.
+5. Add cross-encoder reranker over fused top-k → re-measure. (Outcome: not shipped; see the
+   tech stack table. Measured: dense 0.0564, weighted RRF 0.0597, + MiniLM rerank 0.0528 NDCG@10.)
 6. Add query classification/routing (semantic vs structural) + expansion → re-measure.
 7. Record ablation results at each step (dense-only → +BM25 → +rerank → +routing) for
    the PPT/demo — this is a differentiator, not optional polish.
