@@ -1,0 +1,18 @@
+{
+  "mode": "rrf",
+  "name": "rrf_w0.3",
+  "n_queries": 3765,
+  "wall_s": 18.371323585510254,
+  "index_s": 1.3941502571105957,
+  "first_stage_encode_s": 0.6267590522766113,
+  "rerank_s": 0.0,
+  "search_total_s": 8.046366691589355,
+  "ndcg_at_10": 0.05968,
+  "mrr_at_10": 0.05088018297181644,
+  "recall_at_10": 0.08765,
+  "recall_at_100": 0.19708,
+  "bm25_weight": 0.3,
+  "rerank_top_m": 20,
+  "reranker": null,
+  "rerank_max_length": 512
+}

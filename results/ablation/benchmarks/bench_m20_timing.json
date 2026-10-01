@@ -1,0 +1,17 @@
+{
+  "mode": "rerank",
+  "name": "bench_m20",
+  "n_queries": 25,
+  "wall_s": 282.2741825580597,
+  "index_s": 1.4789469242095947,
+  "first_stage_encode_s": 3.875951051712036,
+  "rerank_s": 276.5526955127716,
+  "search_total_s": 280.57209873199463,
+  "ndcg_at_10": 0.02881,
+  "mrr_at_10": 0.013714285714285714,
+  "recall_at_10": 0.08,
+  "recall_at_100": 0.16,
+  "rerank_top_m": 20,
+  "reranker": null,
+  "rerank_max_length": 512
+}

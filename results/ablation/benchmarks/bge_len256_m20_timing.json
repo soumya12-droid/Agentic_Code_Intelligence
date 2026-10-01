@@ -1,0 +1,17 @@
+{
+  "mode": "rerank",
+  "name": "bge_len256_m20",
+  "n_queries": 25,
+  "wall_s": 133.67087173461914,
+  "index_s": 1.4189674854278564,
+  "first_stage_encode_s": 0.01107025146484375,
+  "rerank_s": 131.92117881774902,
+  "search_total_s": 132.06841850280762,
+  "ndcg_at_10": 0.03857,
+  "mrr_at_10": 0.02571428571428571,
+  "recall_at_10": 0.08,
+  "recall_at_100": 0.16,
+  "rerank_top_m": 20,
+  "reranker": null,
+  "rerank_max_length": 256
+}

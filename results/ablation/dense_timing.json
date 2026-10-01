@@ -1,0 +1,17 @@
+{
+  "mode": "dense",
+  "name": "dense",
+  "n_queries": 3765,
+  "wall_s": 1331.6368672847748,
+  "index_s": 706.6740922927856,
+  "first_stage_encode_s": 620.5399308204651,
+  "rerank_s": 0.0,
+  "search_total_s": 621.9392099380493,
+  "ndcg_at_10": 0.05638,
+  "mrr_at_10": 0.04819515588439891,
+  "recall_at_10": 0.08313,
+  "recall_at_100": 0.19708,
+  "rerank_top_m": 20,
+  "reranker": null,
+  "rerank_max_length": 512
+}
