@@ -1,0 +1,108 @@
+{
+  "task": "AppsRetrieval",
+  "split": "test",
+  "n_queries": 3765,
+  "routed_structural_as_shipped": 0,
+  "routed_structural_without_length_gate": 0,
+  "routed_query_ids": [],
+  "queries_within_word_limit": 5,
+  "queries_containing_the_word_call": 174,
+  "min_words": 22,
+  "median_words": 296,
+  "max_words": 1247,
+  "max_words_gate": 30,
+  "positive_controls": [
+    {
+      "query": "Which functions call normalize?",
+      "expected": "callers",
+      "got": "callers"
+    },
+    {
+      "query": "which methods invoke validate in the codebase",
+      "expected": "callers",
+      "got": "callers"
+    },
+    {
+      "query": "Who calls readInput",
+      "expected": "callers",
+      "got": "callers"
+    },
+    {
+      "query": "callers of writeOutput",
+      "expected": "callers",
+      "got": "callers"
+    },
+    {
+      "query": "Where is checkType called?",
+      "expected": "callers",
+      "got": "callers"
+    },
+    {
+      "query": "What does main call?",
+      "expected": "callees",
+      "got": "callees"
+    },
+    {
+      "query": "which functions does render call",
+      "expected": "callees",
+      "got": "callees"
+    },
+    {
+      "query": "callees of Renderer.draw",
+      "expected": "callees",
+      "got": "callees"
+    },
+    {
+      "query": "what is called by run",
+      "expected": "callees",
+      "got": "callees"
+    },
+    {
+      "query": "Where is normalize defined?",
+      "expected": "definition",
+      "got": "definition"
+    },
+    {
+      "query": "definition of Renderer",
+      "expected": "definition",
+      "got": "definition"
+    },
+    {
+      "query": "where are format and pad implemented",
+      "expected": null,
+      "got": null
+    },
+    {
+      "query": "Which files call checkType before checkLength?",
+      "expected": "before",
+      "got": "before"
+    },
+    {
+      "query": "which functions call readInput before normalize",
+      "expected": "before",
+      "got": "before"
+    },
+    {
+      "query": "where is validate called before render",
+      "expected": "before",
+      "got": "before"
+    },
+    {
+      "query": "What directly or indirectly calls log?",
+      "expected": "transitive",
+      "got": "transitive"
+    },
+    {
+      "query": "everything that transitively calls checkType",
+      "expected": "transitive",
+      "got": "transitive"
+    },
+    {
+      "query": "all transitive callers of main",
+      "expected": "transitive",
+      "got": "transitive"
+    }
+  ],
+  "positive_controls_correct": 18,
+  "n_positive_controls": 18
+}
