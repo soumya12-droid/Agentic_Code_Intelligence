@@ -1,0 +1,387 @@
+{
+  "model": "BAAI/bge-small-en-v1.5",
+  "model_load_seconds": 10.388326000072993,
+  "cpu": "Intel64 Family 6 Model 170 Stepping 4, GenuineIntel",
+  "logical_cpus": 18,
+  "note": "synthetic repository built from real CoIR apps solutions; folders are a benchmark grouping, not a real project structure",
+  "runs": [
+    {
+      "files": 500,
+      "changed_files_requested": 12,
+      "mutations": [
+        "modify",
+        "add_function",
+        "add_comment",
+        "reformat",
+        "modify",
+        "modify",
+        "modify",
+        "add_function",
+        "add_comment",
+        "reformat",
+        "modify",
+        "move_function"
+      ],
+      "v1_full_build": {
+        "wall_seconds": 77.80938450002577,
+        "texts_embedded": 811,
+        "files_total": 500,
+        "files_changed": 500,
+        "files_parsed": 500,
+        "snippets_total": 848,
+        "counts": {
+          "added": 848,
+          "deleted": 0,
+          "unchanged": 0,
+          "modified": 0,
+          "moved": 0
+        },
+        "phase_seconds": {
+          "scan": 6.085794700076804,
+          "parse": 1.3764127999311313,
+          "diff": 0.0018665000097826123,
+          "metadata": 0.055892699980176985,
+          "embed": 70.12081989995204,
+          "faiss_add": 0.016190399997867644,
+          "save": 0.0067786999279633164,
+          "bm25": 0.1434980999911204
+        }
+      },
+      "first_read_of_new_version_seconds": 2.49253679998219,
+      "incremental": {
+        "wall_seconds": 2.115634600049816,
+        "texts_embedded": 8,
+        "files_total": 501,
+        "files_changed": 13,
+        "files_parsed": 13,
+        "snippets_total": 850,
+        "counts": {
+          "added": 2,
+          "deleted": 0,
+          "unchanged": 841,
+          "modified": 6,
+          "moved": 1
+        },
+        "phase_seconds": {
+          "scan": 0.4153320000041276,
+          "parse": 0.020177299971692264,
+          "diff": 0.0020958000095561147,
+          "metadata": 0.024901800090447068,
+          "embed": 1.47203109995462,
+          "faiss_add": 0.007170199998654425,
+          "save": 0.007647200021892786,
+          "bm25": 0.16548900003544986
+        }
+      },
+      "full_rebuild_v2": {
+        "wall_seconds": 81.64048000006005,
+        "texts_embedded": 813,
+        "files_total": 501,
+        "files_changed": 501,
+        "files_parsed": 501,
+        "snippets_total": 850,
+        "counts": {
+          "added": 850,
+          "deleted": 0,
+          "unchanged": 0,
+          "modified": 0,
+          "moved": 0
+        },
+        "phase_seconds": {
+          "scan": 0.2925818000221625,
+          "parse": 1.1675281999632716,
+          "diff": 0.002584500005468726,
+          "metadata": 0.050119200022891164,
+          "embed": 79.35043019999284,
+          "faiss_add": 0.05987140000797808,
+          "save": 0.012446500011719763,
+          "bm25": 0.7024997000116855
+        }
+      },
+      "speedup_vs_full_rebuild": 38.58912120180758,
+      "speedup_vs_v1_full_build": 36.778271870857864,
+      "texts_embedded_incremental": 8,
+      "snippets_added_plus_modified": 8,
+      "unchanged_snippets_embedded": 0,
+      "incremental_equals_full_rebuild": true
+    },
+    {
+      "files": 500,
+      "changed_files_requested": 1,
+      "mutations": [
+        "modify"
+      ],
+      "v1_full_build": {
+        "wall_seconds": 77.80938450002577,
+        "texts_embedded": 811,
+        "files_total": 500,
+        "files_changed": 500,
+        "files_parsed": 500,
+        "snippets_total": 848,
+        "counts": {
+          "added": 848,
+          "deleted": 0,
+          "unchanged": 0,
+          "modified": 0,
+          "moved": 0
+        },
+        "phase_seconds": {
+          "scan": 6.085794700076804,
+          "parse": 1.3764127999311313,
+          "diff": 0.0018665000097826123,
+          "metadata": 0.055892699980176985,
+          "embed": 70.12081989995204,
+          "faiss_add": 0.016190399997867644,
+          "save": 0.0067786999279633164,
+          "bm25": 0.1434980999911204
+        }
+      },
+      "first_read_of_new_version_seconds": 2.6601393000455573,
+      "incremental": {
+        "wall_seconds": 2.616799100069329,
+        "texts_embedded": 1,
+        "files_total": 500,
+        "files_changed": 1,
+        "files_parsed": 1,
+        "snippets_total": 848,
+        "counts": {
+          "added": 0,
+          "deleted": 0,
+          "unchanged": 847,
+          "modified": 1,
+          "moved": 0
+        },
+        "phase_seconds": {
+          "scan": 0.43470629991497844,
+          "parse": 0.0024081000592559576,
+          "diff": 0.0010748999193310738,
+          "metadata": 0.009917500079609454,
+          "embed": 1.5114489000989124,
+          "faiss_add": 0.027679900056682527,
+          "save": 0.013641800032928586,
+          "bm25": 0.6146293999627233
+        }
+      },
+      "full_rebuild_v2": {
+        "wall_seconds": 391.70394400006626,
+        "texts_embedded": 811,
+        "files_total": 500,
+        "files_changed": 500,
+        "files_parsed": 500,
+        "snippets_total": 848,
+        "counts": {
+          "added": 848,
+          "deleted": 0,
+          "unchanged": 0,
+          "modified": 0,
+          "moved": 0
+        },
+        "phase_seconds": {
+          "scan": 0.32854950008913875,
+          "parse": 1.6748259000014514,
+          "diff": 0.002212700084783137,
+          "metadata": 0.05538120004348457,
+          "embed": 389.4461677999934,
+          "faiss_add": 0.03694100002758205,
+          "save": 0.006458900053985417,
+          "bm25": 0.15049999998882413
+        }
+      },
+      "speedup_vs_full_rebuild": 149.68819883409793,
+      "speedup_vs_v1_full_build": 29.734565598851017,
+      "texts_embedded_incremental": 1,
+      "snippets_added_plus_modified": 1,
+      "unchanged_snippets_embedded": 0,
+      "incremental_equals_full_rebuild": true
+    },
+    {
+      "files": 2000,
+      "changed_files_requested": 12,
+      "mutations": [
+        "modify",
+        "add_function",
+        "add_comment",
+        "reformat",
+        "delete_function",
+        "modify",
+        "modify",
+        "add_function",
+        "add_comment",
+        "reformat",
+        "modify",
+        "modify"
+      ],
+      "v1_full_build": {
+        "wall_seconds": 680.9515893999487,
+        "texts_embedded": 3123,
+        "files_total": 2000,
+        "files_changed": 2000,
+        "files_parsed": 2000,
+        "snippets_total": 3340,
+        "counts": {
+          "added": 3340,
+          "deleted": 0,
+          "unchanged": 0,
+          "modified": 0,
+          "moved": 0
+        },
+        "phase_seconds": {
+          "scan": 16.181478400016204,
+          "parse": 4.2065411999356,
+          "diff": 0.0056059000780805945,
+          "metadata": 0.08113219996448606,
+          "embed": 659.7380791000323,
+          "faiss_add": 0.06342410005163401,
+          "save": 0.01055500004440546,
+          "bm25": 0.6542869999539107
+        }
+      },
+      "first_read_of_new_version_seconds": 21.774370800005272,
+      "incremental": {
+        "wall_seconds": 4.63111169997137,
+        "texts_embedded": 8,
+        "files_total": 2000,
+        "files_changed": 12,
+        "files_parsed": 12,
+        "snippets_total": 3342,
+        "counts": {
+          "added": 3,
+          "deleted": 1,
+          "unchanged": 3334,
+          "modified": 5,
+          "moved": 0
+        },
+        "phase_seconds": {
+          "scan": 1.5540236999513581,
+          "parse": 0.020466099958866835,
+          "diff": 0.003486800007522106,
+          "metadata": 0.020020299940370023,
+          "embed": 2.185014799935743,
+          "faiss_add": 0.012500800075940788,
+          "save": 0.011845899978652596,
+          "bm25": 0.8186633000150323
+        }
+      },
+      "full_rebuild_v2": {
+        "wall_seconds": 313.3455321000656,
+        "texts_embedded": 3125,
+        "files_total": 2000,
+        "files_changed": 2000,
+        "files_parsed": 2000,
+        "snippets_total": 3342,
+        "counts": {
+          "added": 3342,
+          "deleted": 0,
+          "unchanged": 0,
+          "modified": 0,
+          "moved": 0
+        },
+        "phase_seconds": {
+          "scan": 1.2639257999835536,
+          "parse": 5.169580499990843,
+          "diff": 0.008063399931415915,
+          "metadata": 0.1042493999702856,
+          "embed": 305.9818640999729,
+          "faiss_add": 0.07204649993218482,
+          "save": 0.011289199930615723,
+          "bm25": 0.7200853000395
+        }
+      },
+      "speedup_vs_full_rebuild": 67.66097481561559,
+      "speedup_vs_v1_full_build": 147.03847229686954,
+      "texts_embedded_incremental": 8,
+      "snippets_added_plus_modified": 8,
+      "unchanged_snippets_embedded": 0,
+      "incremental_equals_full_rebuild": true
+    },
+    {
+      "files": 2000,
+      "changed_files_requested": 1,
+      "mutations": [
+        "modify"
+      ],
+      "v1_full_build": {
+        "wall_seconds": 680.9515893999487,
+        "texts_embedded": 3123,
+        "files_total": 2000,
+        "files_changed": 2000,
+        "files_parsed": 2000,
+        "snippets_total": 3340,
+        "counts": {
+          "added": 3340,
+          "deleted": 0,
+          "unchanged": 0,
+          "modified": 0,
+          "moved": 0
+        },
+        "phase_seconds": {
+          "scan": 16.181478400016204,
+          "parse": 4.2065411999356,
+          "diff": 0.0056059000780805945,
+          "metadata": 0.08113219996448606,
+          "embed": 659.7380791000323,
+          "faiss_add": 0.06342410005163401,
+          "save": 0.01055500004440546,
+          "bm25": 0.6542869999539107
+        }
+      },
+      "first_read_of_new_version_seconds": 20.035630500060506,
+      "incremental": {
+        "wall_seconds": 2.9261006000451744,
+        "texts_embedded": 1,
+        "files_total": 2000,
+        "files_changed": 1,
+        "files_parsed": 1,
+        "snippets_total": 3341,
+        "counts": {
+          "added": 1,
+          "deleted": 0,
+          "unchanged": 3340,
+          "modified": 0,
+          "moved": 0
+        },
+        "phase_seconds": {
+          "scan": 1.566357799922116,
+          "parse": 0.0014753000577911735,
+          "diff": 0.0015266999835148454,
+          "metadata": 0.028247499954886734,
+          "embed": 0.19212160003371537,
+          "faiss_add": 0.03765400010161102,
+          "save": 0.10843599995132536,
+          "bm25": 0.9889159000013024
+        }
+      },
+      "full_rebuild_v2": {
+        "wall_seconds": 312.2024972999934,
+        "texts_embedded": 3124,
+        "files_total": 2000,
+        "files_changed": 2000,
+        "files_parsed": 2000,
+        "snippets_total": 3341,
+        "counts": {
+          "added": 3341,
+          "deleted": 0,
+          "unchanged": 0,
+          "modified": 0,
+          "moved": 0
+        },
+        "phase_seconds": {
+          "scan": 1.3524088999256492,
+          "parse": 4.6505901999771595,
+          "diff": 0.0092762999702245,
+          "metadata": 0.09768680005799979,
+          "embed": 304.96853620000184,
+          "faiss_add": 0.10110880003776401,
+          "save": 0.02635599998757243,
+          "bm25": 0.9858266999945045
+        }
+      },
+      "speedup_vs_full_rebuild": 106.69574972752936,
+      "speedup_vs_v1_full_build": 232.71639717015742,
+      "texts_embedded_incremental": 1,
+      "snippets_added_plus_modified": 1,
+      "unchanged_snippets_embedded": 0,
+      "incremental_equals_full_rebuild": true
+    }
+  ]
+}
