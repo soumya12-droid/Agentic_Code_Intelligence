@@ -29,10 +29,21 @@ class DenseIndex:
     def remove(self, ids) -> int:
         return self.index.remove_ids(np.asarray(ids, dtype=np.int64))
 
-    def search(self, queries, k: int = 10) -> tuple[np.ndarray, np.ndarray]:
-        """Return (scores, ids), each shape (n_queries, k). Missing hits have id -1."""
+    def search(self, queries, k: int = 10, allowed_ids=None) -> tuple[np.ndarray, np.ndarray]:
+        """Return (scores, ids), each shape (n_queries, k). Missing hits have id -1.
+
+        allowed_ids restricts the search to those vector ids (a faiss IDSelectorBatch), which
+        is how a versioned index searches "as of" a version without rebuilding anything."""
         k = max(1, min(k, self.index.ntotal)) if self.index.ntotal else 1
-        return self.index.search(self._prep(queries), k)
+        if allowed_ids is None:
+            return self.index.search(self._prep(queries), k)
+        allowed = np.ascontiguousarray(np.asarray(list(allowed_ids), dtype=np.int64))
+        n = np.atleast_2d(np.asarray(queries)).shape[0]
+        if allowed.size == 0:
+            return np.full((n, k), -np.inf, dtype=np.float32), np.full((n, k), -1, dtype=np.int64)
+        params = faiss.SearchParameters()
+        params.sel = faiss.IDSelectorBatch(allowed)
+        return self.index.search(self._prep(queries), k, params=params)
 
     def __len__(self) -> int:
         return self.index.ntotal
