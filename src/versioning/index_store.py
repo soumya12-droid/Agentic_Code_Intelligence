@@ -14,9 +14,18 @@ only touches what changed:
 
 A vector id is derived from the snippet's content hash, so identical code in two files shares
 one vector. "Valid in version V" means version_added <= V < version_removed.
+
+Lineage (Phase 5). Every snippet row has a lineage_id: a new snippet starts its own lineage, and
+a snippet that replaces another at the same key (an edit, including reverting an edit) or is the
+same code at a new key (a move) inherits that snippet's lineage. A lineage is therefore the
+history of one logical function. search(as_of="all") ranks every version at once and, by
+default, returns one result per lineage: ranked by its best-matching version, showing the latest.
+A rename is a delete plus an add, so it starts a new lineage; so does a function that is deleted
+and added back in a later version.
 """
 from __future__ import annotations
 
+import difflib
 import json
 import shutil
 import sqlite3
@@ -62,7 +71,8 @@ CREATE TABLE IF NOT EXISTS snippets (
     version_added TEXT NOT NULL,
     version_removed TEXT,                   -- NULL while the snippet is still current
     seq_added INTEGER NOT NULL,
-    seq_removed INTEGER
+    seq_removed INTEGER,
+    lineage_id INTEGER                      -- the history of one logical function (Phase 5)
 );
 CREATE TABLE IF NOT EXISTS snippet_text (   -- one row per distinct content hash that has a vector
     snippet_id TEXT PRIMARY KEY,
@@ -114,9 +124,14 @@ class VersionedIndex:
         self.db = sqlite3.connect(str(self.dir / "snippets.db"))
         self.db.row_factory = sqlite3.Row
         self.db.executescript(SCHEMA)
+        if "lineage_id" not in {r["name"] for r in self.db.execute("PRAGMA table_info(snippets)")}:
+            self.db.execute("ALTER TABLE snippets ADD COLUMN lineage_id INTEGER")   # a store from Phase 4
+        self.db.execute("CREATE INDEX IF NOT EXISTS idx_snip_lineage ON snippets(lineage_id)")
+        if self.db.execute("SELECT 1 FROM snippets WHERE lineage_id IS NULL LIMIT 1").fetchone():
+            self.backfill_lineage()
         faiss_path = self.dir / "index.faiss"
         self.dense = DenseIndex.load(faiss_path) if faiss_path.exists() else DenseIndex(embedder.dim)
-        self._bm25: dict[int, BM25Index] = {}
+        self._bm25: dict[tuple[int, int], BM25Index] = {}
 
     # ---- versions ------------------------------------------------------------------------
     def versions(self) -> list[str]:
@@ -176,6 +191,7 @@ class VersionedIndex:
         old = [Snippet(r["file_path"], r["qualname"], r["ordinal"], r["kind"], r["language"],
                        r["line_start"], r["line_end"], r["snippet_id"], "") for r in old_rows]
         row_of = {(r["file_path"], r["qualname"], r["ordinal"]): r["row_id"] for r in old_rows}
+        lineage_of = {(r["file_path"], r["qualname"], r["ordinal"]): r["lineage_id"] for r in old_rows}
         diff = diff_snippets(old, new)
         stats.counts = diff.counts()
         stats.counts["unchanged"] += self.db.execute(
@@ -190,12 +206,12 @@ class VersionedIndex:
                 self._close(row_of[o.key], version, seq)
             for o, n in diff.modified:
                 self._close(row_of[o.key], version, seq)
-                self._open(n, version, seq)
+                self._open(n, version, seq, lineage_of[o.key])      # an edit continues the lineage
                 db.execute("INSERT INTO lineage VALUES (?,?,?,?,?)",
                            (o.snippet_id, n.snippet_id, n.file_path, n.qualname, version))
             for o, n in diff.moved:
                 self._close(row_of[o.key], version, seq)
-                self._open(n, version, seq)
+                self._open(n, version, seq, lineage_of[o.key])      # so does a move
             for n in diff.added:
                 self._open(n, version, seq)
             for n in diff.unchanged:   # same code; keep the row, refresh its line numbers
@@ -246,7 +262,7 @@ class VersionedIndex:
         t = time.perf_counter()
         self._bm25.clear()
         if build_bm25:
-            self._bm25_for(seq)
+            self._bm25_for(seq, seq)
         sec["bm25"] = time.perf_counter() - t
         return stats
 
@@ -266,12 +282,14 @@ class VersionedIndex:
         self.db.execute("UPDATE snippets SET version_removed=?, seq_removed=? WHERE row_id=?",
                         (version, seq, row_id))
 
-    def _open(self, n: Snippet, version: str, seq: int) -> None:
-        self.db.execute(
+    def _open(self, n: Snippet, version: str, seq: int, lineage_id: int | None = None) -> None:
+        cur = self.db.execute(
             "INSERT INTO snippets (snippet_id, content_hash, file_path, qualname, kind, language, ordinal,"
-            " line_start, line_end, version_added, seq_added) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+            " line_start, line_end, version_added, seq_added, lineage_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
             (n.snippet_id, n.snippet_id, n.file_path, n.qualname, n.kind, n.language, n.ordinal,
-             n.line_start, n.line_end, version, seq))
+             n.line_start, n.line_end, version, seq, lineage_id))
+        if lineage_id is None:   # a new snippet starts its own lineage
+            self.db.execute("UPDATE snippets SET lineage_id=? WHERE row_id=?", (cur.lastrowid, cur.lastrowid))
 
     # ---- search --------------------------------------------------------------------------
     def valid_rows(self, version: str | None = None) -> list[sqlite3.Row]:
@@ -281,49 +299,208 @@ class VersionedIndex:
             "SELECT * FROM snippets WHERE seq_added <= ? AND (seq_removed IS NULL OR seq_removed > ?)"
             " ORDER BY file_path, line_start", (seq, seq)).fetchall()
 
-    def _bm25_for(self, seq: int) -> BM25Index:
-        if seq not in self._bm25:
+    def _labels(self) -> dict[int, str]:
+        return {r["seq"]: r["version"] for r in self.db.execute("SELECT seq, version FROM versions")}
+
+    def _range(self, as_of: str | None, between: tuple[str, str] | None) -> tuple[int, int, bool]:
+        """The (first, last) version numbers a search covers, and whether it spans several."""
+        if as_of is not None and between is not None:
+            raise ValueError("pass as_of or between, not both")
+        floor = int(self._meta("min_searchable_seq", "1"))
+        if between is not None:
+            lo, hi = self._seq(between[0]), self._seq(between[1])
+            if lo > hi:
+                raise ValueError(f"between={between!r} is not in version order")
+            multi = True
+        elif as_of == "all":
+            lo, hi, multi = 1, self._seq(None), True
+            lo = max(lo, floor)
+        else:
+            lo = hi = self._seq(as_of)
+            multi = False
+        if lo < floor:
+            raise ValueError(f"version {as_of or between[0]!r} was vacuumed and can no longer be searched")
+        return lo, hi, multi
+
+    def _rows_in_range(self, lo: int, hi: int) -> list[sqlite3.Row]:
+        """Snippet rows valid at some version in [lo, hi]."""
+        return self.db.execute(
+            "SELECT * FROM snippets WHERE seq_added <= ? AND (seq_removed IS NULL OR seq_removed > ?)"
+            " ORDER BY file_path, line_start", (hi, lo)).fetchall()
+
+    def _bm25_for(self, lo: int, hi: int | None = None) -> BM25Index:
+        hi = lo if hi is None else hi
+        if (lo, hi) not in self._bm25:
             rows = self.db.execute(
                 "SELECT DISTINCT t.vector_id, t.text FROM snippets s JOIN snippet_text t ON t.snippet_id=s.snippet_id"
-                " WHERE s.seq_added <= ? AND (s.seq_removed IS NULL OR s.seq_removed > ?)", (seq, seq)).fetchall()
+                " WHERE s.seq_added <= ? AND (s.seq_removed IS NULL OR s.seq_removed > ?)", (hi, lo)).fetchall()
             idx = BM25Index()
             idx.build([{"id": r["vector_id"], "text": r["text"]} for r in rows])
-            self._bm25[seq] = idx
-        return self._bm25[seq]
+            self._bm25[(lo, hi)] = idx
+        return self._bm25[(lo, hi)]
+
+    def _row_dict(self, r: sqlite3.Row, labels: dict[int, str]) -> dict:
+        last = max(labels)
+        through = labels[r["seq_removed"] - 1] if r["seq_removed"] else labels[last]
+        return {"file_path": r["file_path"], "qualname": r["qualname"], "kind": r["kind"],
+                "ordinal": r["ordinal"], "line_start": r["line_start"], "line_end": r["line_end"],
+                "snippet_id": r["snippet_id"], "version_added": r["version_added"],
+                "version_removed": r["version_removed"], "valid_through": through,
+                "lineage_id": r["lineage_id"]}
 
     def search(self, query: str, k: int = 10, as_of: str | None = None, use_bm25: bool = True,
-               bm25_weight: float = 0.3, candidates: int = 100) -> list[dict]:
-        """Rank the snippets valid in version `as_of` (default: the latest) for a query.
+               bm25_weight: float = 0.3, candidates: int = 100, group_by_lineage: bool | None = None,
+               between: tuple[str, str] | None = None) -> list[dict]:
+        """Rank snippets for a query.
 
-        Dense search is restricted to that version's vector ids with a FAISS IDSelector;
-        with use_bm25 it is fused with BM25 over the same snippets (weighted RRF, as in the
-        retrieval pipeline). Results are snippet rows; identical code in several files
-        yields one result per file."""
-        seq = self._seq(as_of)
-        floor = int(self._meta("min_searchable_seq", "1"))
-        if seq < floor:
-            raise ValueError(f"version {as_of!r} was vacuumed and can no longer be searched")
-        rows = self.valid_rows(as_of)
+        as_of          a version label (default: the latest), or "all" to rank every version at once;
+        between        (first, last): snippets valid at some version in that range;
+        group_by_lineage  return one result per lineage instead of one per snippet version. The default
+                       is True when several versions are searched and False for a single version.
+
+        Dense search is restricted to the matching vector ids with a FAISS IDSelector; with use_bm25 it
+        is fused with BM25 over the same snippets (weighted RRF, as in the retrieval pipeline).
+
+        A grouped result is ranked by the score of its best-matching version but shows the lineage's
+        latest version (in the searched range): see matched_version / matched_differs and
+        describe_result(). Ungrouped results are snippet rows; identical code in several files yields
+        one result per file."""
+        lo, hi, multi = self._range(as_of, between)
+        if group_by_lineage is None:
+            group_by_lineage = multi
+        labels = self._labels()
+        rows = self._rows_in_range(lo, hi)
         by_vid: dict[int, list[sqlite3.Row]] = defaultdict(list)
+        by_lineage: dict[int, list[sqlite3.Row]] = defaultdict(list)
         for r in rows:
             by_vid[vector_id(r["snippet_id"])].append(r)
+            by_lineage[r["lineage_id"]].append(r)
         if not by_vid:
             return []
         q = self.embedder.embed_queries([query])
-        scores, ids = self.dense.search(q, k=min(candidates, len(by_vid)), allowed_ids=by_vid.keys())
-        dense_list = [(int(i), float(s)) for s, i in zip(scores[0], ids[0]) if i != -1]
-        ranked = dense_list
-        if use_bm25:
-            sparse_list = self._bm25_for(seq).search(query, candidates)
-            ranked = fuse(dense_list, sparse_list, weights=[1.0, bm25_weight])
+        cand = max(candidates, 4 * k) if group_by_lineage else candidates
+        while True:   # widen the candidate pool until k lineages are found (many versions share a lineage)
+            n = min(cand, len(by_vid))
+            scores, ids = self.dense.search(q, k=n, allowed_ids=by_vid.keys())
+            ranked = [(int(i), float(s)) for s, i in zip(scores[0], ids[0]) if i != -1]
+            if use_bm25:
+                ranked = fuse(ranked, self._bm25_for(lo, hi).search(query, cand), weights=[1.0, bm25_weight])
+            if not group_by_lineage:
+                break
+            groups: dict[int, tuple[float, sqlite3.Row]] = {}
+            for vid, score in ranked:
+                for r in by_vid[vid]:
+                    groups.setdefault(r["lineage_id"], (float(score), r))   # first hit = best-scoring version
+            if len(groups) >= k or n >= len(by_vid):
+                break
+            cand *= 2
+        if not group_by_lineage:
+            return [{"score": float(score), **self._row_dict(r, labels)}
+                    for vid, score in ranked[:k] for r in by_vid[vid]]
         out = []
-        for vid, score in ranked[:k]:
-            for r in by_vid[vid]:
-                out.append({"score": float(score), "file_path": r["file_path"], "qualname": r["qualname"],
-                            "kind": r["kind"], "ordinal": r["ordinal"], "line_start": r["line_start"], "line_end": r["line_end"],
-                            "snippet_id": r["snippet_id"], "version_added": r["version_added"],
-                            "version_removed": r["version_removed"]})
+        for lid, (score, matched) in list(groups.items())[:k]:
+            members = sorted(by_lineage[lid], key=lambda m: (m["seq_added"], m["row_id"]))
+            shown = members[-1]
+            out.append({"score": score, **self._row_dict(shown, labels), "n_versions": len(members),
+                        "versions": [m["version_added"] for m in members],
+                        "matched_version": matched["version_added"], "matched_snippet_id": matched["snippet_id"],
+                        "matched_differs": matched["snippet_id"] != shown["snippet_id"]})
         return out
+
+    @staticmethod
+    def describe_result(r: dict) -> str:
+        """One line for a grouped result: which version is shown and which one matched."""
+        loc = f"{r['file_path']}:{r['line_start']}-{r['line_end']}  {r['qualname']}"
+        if "n_versions" not in r:
+            span = r["version_added"] if r["valid_through"] == r["version_added"] else f"{r['version_added']}..{r['valid_through']}"
+            return f"{loc}  [{span}]"
+        span = r["version_added"] if r["valid_through"] == r["version_added"] else f"{r['version_added']}..{r['valid_through']}"
+        n = r["n_versions"]
+        versions = f"{n} version{'s' if n != 1 else ''}" + (f": {', '.join(r['versions'])}" if n > 1 else "")
+        match = (f"matched on the wording of {r['matched_version']}" if r["matched_differs"]
+                 else "matched on this version")
+        return f"{loc}  [{versions}]  showing {span}, {match}"
+
+    # ---- lineage -------------------------------------------------------------------------
+    def history(self, name: str, file_path: str | None = None, with_diffs: bool = False) -> list[dict]:
+        """The history of every function called `name` (or `Class.name`): one entry per lineage, each
+        with its timeline of versions. with_diffs adds a unified diff from the previous version, which
+        needs the stored text of both versions: it is unavailable for versions removed by vacuum()."""
+        labels = self._labels()
+        sql = ("SELECT DISTINCT lineage_id FROM snippets WHERE (qualname=? OR qualname LIKE ?)"
+               " AND (kind IN ('function','method') OR qualname='<module>')")
+        args: list = [name, "%." + name]
+        if file_path is not None:
+            sql += " AND file_path=?"
+            args.append(file_path)
+        out = []
+        for lr in self.db.execute(sql, args).fetchall():
+            members = self.db.execute("SELECT * FROM snippets WHERE lineage_id=? ORDER BY seq_added, row_id",
+                                      (lr["lineage_id"],)).fetchall()
+            texts = {}
+            if with_diffs:
+                ids = list({m["snippet_id"] for m in members})
+                texts = {r["snippet_id"]: r["text"] for r in self.db.execute(
+                    f"SELECT snippet_id, text FROM snippet_text WHERE snippet_id IN ({','.join('?' * len(ids))})", ids)}
+            seen: list[str] = []
+            entries = []
+            for i, m in enumerate(members):
+                if i == 0:
+                    change = "added"
+                elif m["snippet_id"] == members[i - 1]["snippet_id"]:
+                    change = "moved"
+                elif m["snippet_id"] in seen:
+                    change = "reverted"
+                else:
+                    change = "modified"
+                seen.append(m["snippet_id"])
+                e = self._row_dict(m, labels)
+                e["change"] = change
+                if with_diffs and i > 0:
+                    prev, cur = texts.get(members[i - 1]["snippet_id"]), texts.get(m["snippet_id"])
+                    if prev is None or cur is None:
+                        e["diff"], e["diff_note"] = None, "unavailable: the stored text of a version was removed by vacuum()"
+                    else:
+                        e["diff"] = "".join(difflib.unified_diff(
+                            prev.splitlines(True), cur.splitlines(True),
+                            f"{members[i - 1]['version_added']}", f"{m['version_added']}"))
+                entries.append(e)
+            out.append({"lineage_id": lr["lineage_id"], "qualname": members[-1]["qualname"],
+                        "file_path": members[-1]["file_path"], "n_versions": len(entries), "versions": entries})
+        out.sort(key=lambda h: (h["file_path"], h["qualname"], h["lineage_id"]))
+        return out
+
+    def backfill_lineage(self) -> int:
+        """Assign lineage_id to rows that have none (a store built before lineage ids existed).
+        Replays the versions in order: a row opened at version V continues the lineage of a row
+        closed at V with the same key (an edit), else of one with the same code (a move), else it
+        starts its own. Returns the number of rows updated."""
+        rows = self.db.execute("SELECT * FROM snippets ORDER BY seq_added, row_id").fetchall()
+        closed_at: dict[int, list[sqlite3.Row]] = defaultdict(list)
+        for r in rows:
+            if r["seq_removed"] is not None:
+                closed_at[r["seq_removed"]].append(r)
+        lineage: dict[int, int] = {}
+        used: set[int] = set()
+        changes = []
+        for r in rows:
+            lin = r["lineage_id"]
+            if lin is None:
+                cands = [c for c in closed_at.get(r["seq_added"], []) if c["row_id"] not in used]
+                pick = next((c for c in cands if (c["file_path"], c["qualname"], c["ordinal"]) ==
+                             (r["file_path"], r["qualname"], r["ordinal"])), None)
+                if pick is None:
+                    pick = next((c for c in cands if c["snippet_id"] == r["snippet_id"]), None)
+                if pick is not None:
+                    used.add(pick["row_id"])
+                    lin = lineage[pick["row_id"]]
+                else:
+                    lin = r["row_id"]
+                changes.append((lin, r["row_id"]))
+            lineage[r["row_id"]] = lin
+        with self.db:
+            self.db.executemany("UPDATE snippets SET lineage_id=? WHERE row_id=?", changes)
+        return len(changes)
 
     # ---- maintenance ---------------------------------------------------------------------
     def vacuum(self, keep_since: str | None = None) -> dict:

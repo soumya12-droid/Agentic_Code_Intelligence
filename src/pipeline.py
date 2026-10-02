@@ -1,8 +1,9 @@
-"""Top-level entry point: route a query and answer it (Phase 3 — see docs/PROJECT_PLAN.md section 3.1/7).
+"""Top-level entry point: route a query and answer it (Phases 3 and 5 — see docs/PROJECT_PLAN.md section 3.1/7).
 
 answer(query, db) sends call-graph questions ("which functions call X?") to the structural
-engine and returns functions with file and line, grouped by file. Anything else is handed to
-semantic_fn, the dense + BM25 + RRF retrieval path, when one is supplied; without it the
+engine and returns functions with file and line, grouped by file. Version-history questions
+("show the history of X") go to a VersionedIndex when one is supplied. Anything else is handed
+to semantic_fn, the dense + BM25 + RRF retrieval path, when one is supplied; without it the
 result only reports that the query belongs on the semantic path.
 
 This is separate from the graded MTEB evaluation (scripts/run_eval.py): structural queries
@@ -18,8 +19,8 @@ from src.structural.callgraph import CallGraphDB
 
 @dataclass
 class Answer:
-    route: str                                   # "structural" or "semantic"
-    kind: str | None = None                      # callers | callees | definition | before | transitive
+    route: str                                   # "structural", "history" or "semantic"
+    kind: str | None = None                      # callers | callees | definition | before | transitive | history
     names: tuple[str, ...] = ()
     results: list[dict] = field(default_factory=list)
     text: str = ""
@@ -83,8 +84,30 @@ def run_structural(intent: StructuralIntent, db: CallGraphDB) -> Answer:
     return Answer("structural", intent.kind, a, results, _format(intent.kind, a, results, db))
 
 
-def answer(query: str, db: CallGraphDB, semantic_fn=None) -> Answer:
+def _format_history(name: str, histories: list[dict]) -> str:
+    if not histories:
+        return f"History of {name}: no function named '{name}' in the versioned index."
+    lines = [f"History of {name} ({len(histories)} lineage{'s' if len(histories) != 1 else ''}):"]
+    for h in histories:
+        lines.append(f"  {h['file_path']}::{h['qualname']}  ({h['n_versions']} version{'s' if h['n_versions'] != 1 else ''})")
+        for e in h["versions"]:
+            span = e["version_added"] if e["valid_through"] == e["version_added"] else f"{e['version_added']}..{e['valid_through']}"
+            lines.append(f"    {span:<8} {e['change']:<9} {e['file_path']}:{e['line_start']}-{e['line_end']}")
+            if e.get("diff"):
+                lines += ["      " + d for d in e["diff"].splitlines() if d[:1] in "+-" and d[:3] not in ("+++", "---")]
+            elif e.get("diff_note"):
+                lines.append("      (diff " + e["diff_note"] + ")")
+    return "\n".join(lines)
+
+
+def answer(query: str, db: CallGraphDB | None, semantic_fn=None, versioned_index=None) -> Answer:
     intent = classify(query)
+    if intent is not None and intent.kind == "history":
+        if versioned_index is None:
+            return Answer("history", "history", intent.names,
+                          text="This is a version-history question; no versioned index was supplied.")
+        histories = versioned_index.history(intent.names[0], with_diffs=True)
+        return Answer("history", "history", intent.names, histories, _format_history(intent.names[0], histories))
     if intent is not None:
         return run_structural(intent, db)
     if semantic_fn is not None:

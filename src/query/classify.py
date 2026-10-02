@@ -13,6 +13,8 @@ Supported patterns (X and Y are function, method or class names):
   definition   "where is X defined?", "definition of X"
   before       "which functions call X before Y?", "where is X called before Y"
   transitive   "what directly or indirectly calls X?", "all transitive callers of X"
+  history      "show the history of X", "how has X changed over time", "all versions of X",
+               "what changed in X across versions"   (answered from the versioned index, Phase 5)
 """
 from __future__ import annotations
 
@@ -25,7 +27,7 @@ _NAME = r"[`'\"]?(?P<{g}>[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*)(?:\(\))?[`'\"]
 N1, N2 = _NAME.format(g="a"), _NAME.format(g="b")
 _NOUN = r"(?:functions?|methods?|files?|modules?|classes|class|callers?|code|places|lines)"
 _TAIL = r"(?:\s+(?:in|of|from|within|across|inside)\s+(?:the\s+|this\s+)?(?:repo|repository|codebase|code|project|files?)\b)?"
-_PREFIX = r"^(?:please\s+)?(?:(?:can|could)\s+you\s+)?(?:(?:tell|show|give)\s+me\s+)?(?:list\s+|find\s+)?(?:all\s+)?(?:the\s+)?"
+_PREFIX = r"^(?:please\s+)?(?:(?:can|could)\s+you\s+)?(?:(?:tell|show|give)(?:\s+me)?\s+)?(?:list\s+|find\s+)?(?:all\s+)?(?:the\s+)?"
 
 # Checked in this order: the more specific patterns first.
 _PATTERNS: list[tuple[str, re.Pattern]] = [
@@ -58,6 +60,16 @@ _PATTERNS: list[tuple[str, re.Pattern]] = [
         _PREFIX + r"where\s+(?:is|are)\s+" + N1 + r"\s+(?:defined|declared|implemented)" + _TAIL + r"\s*$", re.I)),
     ("definition", re.compile(
         _PREFIX + r"(?:the\s+)?(?:definition|declaration)\s+of\s+" + N1 + _TAIL + r"\s*$", re.I)),
+    ("history", re.compile(
+        _PREFIX + r"(?:(?:what|which)\s+(?:is\s+)?)?(?:the\s+)?(?:version\s+)?history\s+of\s+" + N1 + _TAIL + r"\s*$", re.I)),
+    ("history", re.compile(
+        _PREFIX + r"(?:all\s+(?:the\s+)?|every\s+)versions\s+of\s+" + N1 + _TAIL + r"\s*$", re.I)),
+    ("history", re.compile(
+        _PREFIX + r"how\s+(?:has|have|did|does)\s+" + N1 + r"\s+(?:changed?|evolved?)"
+        r"(?:\s+(?:over\s+time|across\s+versions|between\s+versions|across\s+commits))?" + _TAIL + r"\s*$", re.I)),
+    ("history", re.compile(
+        _PREFIX + r"what\s+(?:has\s+)?changed\s+in\s+" + N1 +
+        r"(?:\s+(?:over\s+time|across\s+versions|between\s+versions|across\s+commits))?" + _TAIL + r"\s*$", re.I)),
 ]
 
 _NOT_NAMES = {
@@ -72,7 +84,7 @@ _NOT_NAMES = {
 
 @dataclass(frozen=True)
 class StructuralIntent:
-    kind: str            # callers | callees | definition | before | transitive
+    kind: str            # callers | callees | definition | before | transitive | history
     names: tuple[str, ...]
 
 
