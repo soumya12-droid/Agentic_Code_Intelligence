@@ -143,6 +143,11 @@ class Router(unittest.TestCase):
         ("which functions call readInput before normalize()", "before", ("readInput", "normalize")),
         ("What directly or indirectly calls checkType?", "transitive", ("checkType",)),
         ("all transitive callers of log", "transitive", ("log",)),
+        ("Show the history of validate", "history", ("validate",)),
+        ("how has normalize changed over time", "history", ("normalize",)),
+        ("what changed in validate across versions", "history", ("validate",)),
+        ("all versions of pad", "history", ("pad",)),
+        ("What is the version history of Renderer.draw?", "history", ("Renderer.draw",)),
     ]
     NEGATIVE = [
         "How is the input preprocessed before going to the main function?",
@@ -153,6 +158,10 @@ class Router(unittest.TestCase):
         "What does the program print for the sample input?",
         "Given an array of n integers, find the number of pairs that call each other " * 6,
         "which functions call it",
+        "How has the input changed before going to the main function?",
+        "what changed in the code",
+        "history of the roman empire problem",
+        "Which version of the algorithm is faster?",
         "what calls the",
         "",
     ]
