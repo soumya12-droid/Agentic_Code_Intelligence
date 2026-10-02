@@ -101,8 +101,43 @@
       "query": "all transitive callers of main",
       "expected": "transitive",
       "got": "transitive"
+    },
+    {
+      "query": "Show the history of validate",
+      "expected": "history",
+      "got": "history"
+    },
+    {
+      "query": "how has normalize changed over time",
+      "expected": "history",
+      "got": "history"
+    },
+    {
+      "query": "what changed in validate across versions",
+      "expected": "history",
+      "got": "history"
+    },
+    {
+      "query": "all versions of pad",
+      "expected": "history",
+      "got": "history"
+    },
+    {
+      "query": "What is the version history of Renderer.draw",
+      "expected": "history",
+      "got": "history"
+    },
+    {
+      "query": "history of the roman empire problem",
+      "expected": null,
+      "got": null
+    },
+    {
+      "query": "How has the input changed before going to the main function?",
+      "expected": null,
+      "got": null
     }
   ],
-  "positive_controls_correct": 18,
-  "n_positive_controls": 18
+  "positive_controls_correct": 25,
+  "n_positive_controls": 25
 }

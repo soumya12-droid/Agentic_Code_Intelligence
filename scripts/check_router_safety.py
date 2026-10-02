@@ -42,6 +42,13 @@ CONTROLS = [
     ("What directly or indirectly calls log?", "transitive"),
     ("everything that transitively calls checkType", "transitive"),
     ("all transitive callers of main", "transitive"),
+    ("Show the history of validate", "history"),
+    ("how has normalize changed over time", "history"),
+    ("what changed in validate across versions", "history"),
+    ("all versions of pad", "history"),
+    ("What is the version history of Renderer.draw", "history"),
+    ("history of the roman empire problem", None),                      # must NOT route
+    ("How has the input changed before going to the main function?", None),   # must NOT route
 ]
 
 

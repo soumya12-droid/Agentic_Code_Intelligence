@@ -1,0 +1,131 @@
+{
+  "files": 500,
+  "versions": 5,
+  "hot_files": 30,
+  "queries": 219,
+  "k": 10,
+  "snippet_rows": 977,
+  "lineages": 852,
+  "versions_per_lineage": {
+    "1": 785,
+    "2": 35,
+    "3": 13,
+    "4": 12,
+    "5": 7
+  },
+  "timeline": [
+    {
+      "version": "v1",
+      "files_edited": 0,
+      "counts": {
+        "added": 848,
+        "deleted": 0,
+        "unchanged": 0,
+        "modified": 0,
+        "moved": 0
+      },
+      "embedded": 811,
+      "seconds": 68.0
+    },
+    {
+      "version": "v2",
+      "files_edited": 38,
+      "counts": {
+        "added": 2,
+        "deleted": 0,
+        "unchanged": 811,
+        "modified": 37,
+        "moved": 0
+      },
+      "embedded": 39,
+      "seconds": 9.7
+    },
+    {
+      "version": "v3",
+      "files_edited": 33,
+      "counts": {
+        "added": 0,
+        "deleted": 0,
+        "unchanged": 826,
+        "modified": 24,
+        "moved": 0
+      },
+      "embedded": 24,
+      "seconds": 5.8
+    },
+    {
+      "version": "v4",
+      "files_edited": 38,
+      "counts": {
+        "added": 2,
+        "deleted": 0,
+        "unchanged": 813,
+        "modified": 37,
+        "moved": 0
+      },
+      "embedded": 39,
+      "seconds": 11.5
+    },
+    {
+      "version": "v5",
+      "files_edited": 34,
+      "counts": {
+        "added": 0,
+        "deleted": 0,
+        "unchanged": 825,
+        "modified": 27,
+        "moved": 0
+      },
+      "embedded": 27,
+      "seconds": 7.3
+    }
+  ],
+  "build_seconds_all_versions": 102.59644509991631,
+  "note": "synthetic repository from real apps solutions, folders are a grouping for the experiment; hit rate is secondary: bge-small's Recall@10 on the full AppsRetrieval benchmark is about 0.08",
+  "configs": {
+    "hybrid (dense + BM25, as shipped)": {
+      "ungrouped_distinct_functions_in_top10_mean": 9.28310502283105,
+      "ungrouped_slots_wasted_on_extra_versions_mean": 0.7168949771689498,
+      "ungrouped_share_of_slots_wasted": 0.07168949771689498,
+      "ungrouped_queries_with_any_wasted_slot": 0.4063926940639269,
+      "ungrouped_queries_with_3_or_more_wasted": 0.0958904109589041,
+      "grouped_distinct_functions_in_top10_mean": 10.0,
+      "latest_only_distinct_functions_in_top10_mean": 10.0,
+      "hit_rate_at_10": {
+        "ungrouped": 0.2968036529680365,
+        "grouped": 0.3150684931506849,
+        "latest_version_only": 0.319634703196347
+      },
+      "hits": {
+        "ungrouped": 65,
+        "grouped": 69,
+        "latest_version_only": 70,
+        "of_queries": 219
+      },
+      "grouped_results_matched_on_an_older_version_mean_per_query": 0.4337899543378995,
+      "queries_where_grouping_dropped_a_lineage_the_ungrouped_top10_had": 0
+    },
+    "dense only": {
+      "ungrouped_distinct_functions_in_top10_mean": 9.219178082191782,
+      "ungrouped_slots_wasted_on_extra_versions_mean": 0.7808219178082192,
+      "ungrouped_share_of_slots_wasted": 0.07808219178082192,
+      "ungrouped_queries_with_any_wasted_slot": 0.410958904109589,
+      "ungrouped_queries_with_3_or_more_wasted": 0.0958904109589041,
+      "grouped_distinct_functions_in_top10_mean": 10.0,
+      "latest_only_distinct_functions_in_top10_mean": 10.0,
+      "hit_rate_at_10": {
+        "ungrouped": 0.2602739726027397,
+        "grouped": 0.2602739726027397,
+        "latest_version_only": 0.2648401826484018
+      },
+      "hits": {
+        "ungrouped": 57,
+        "grouped": 57,
+        "latest_version_only": 58,
+        "of_queries": 219
+      },
+      "grouped_results_matched_on_an_older_version_mean_per_query": 0.4748858447488584,
+      "queries_where_grouping_dropped_a_lineage_the_ungrouped_top10_had": 0
+    }
+  }
+}

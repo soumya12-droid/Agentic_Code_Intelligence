@@ -1,0 +1,48 @@
+v1: {'added': 35, 'deleted': 0, 'unchanged': 0, 'modified': 0, 'moved': 0}, snippets embedded: 35
+v2: {'added': 0, 'deleted': 0, 'unchanged': 34, 'modified': 1, 'moved': 0}, snippets embedded: 1
+v3: {'added': 0, 'deleted': 0, 'unchanged': 33, 'modified': 1, 'moved': 1}, snippets embedded: 1
+v4: {'added': 0, 'deleted': 0, 'unchanged': 34, 'modified': 1, 'moved': 0}, snippets embedded: 1
+v5: {'added': 0, 'deleted': 0, 'unchanged': 33, 'modified': 2, 'moved': 0}, snippets embedded: 1
+
+query: 'validate the input'   (all five versions at once, dense-only)
+
+UNGROUPED top 5 (one result per snippet version):
+  1. 0.7974  src/validate.js:5-16  validate  [v3..v4]
+  2. 0.7953  src/validate.js:5-16  validate  [v5]
+  3. 0.7801  src/validate.js:5-15  validate  [v2]
+  4. 0.7682  src/validate.js:5-12  validate  [v1]
+  5. 0.7152  src/helpers.js:10-14  checkType  [v1..v5]
+
+GROUPED BY LINEAGE top 5 (one result per function, ranked by its best-matching version, showing its latest):
+  1. 0.7974  src/validate.js:5-16  validate  [4 versions: v1, v2, v3, v5]  showing v5, matched on the wording of v3
+  2. 0.7152  src/helpers.js:10-14  checkType  [1 version]  showing v1..v5, matched on this version
+  3. 0.6550  src/io.js:6-10  readInput  [1 version]  showing v1..v5, matched on this version
+  4. 0.6502  src/validate.js:1-19  <module>  [1 version]  showing v1..v5, matched on this version
+  5. 0.6230  src/preprocess.js:10-12  tokenize  [1 version]  showing v1..v5, matched on this version
+
+distinct functions in the top 5: ungrouped 2, grouped 5
+
+GROUPED, query 'input too long' (v1-v4 say 'input too long', v5 says 'input is too long'):
+  1. 0.7356  src/validate.js:5-16  validate  [4 versions: v1, v2, v3, v5]  showing v5, matched on the wording of v1
+  2. 0.6154  src/io.js:6-10  readInput  [1 version]  showing v1..v5, matched on this version
+  3. 0.6097  src/helpers.js:10-14  checkType  [1 version]  showing v1..v5, matched on this version
+  4. 0.5974  src/helpers.js:22-24  pad  [2 versions: v1, v3]  showing v3..v5, matched on this version
+  5. 0.5969  src/helpers.js:16-18  checkLength  [1 version]  showing v1..v5, matched on this version
+
+History of validate (1 lineage):
+  src/validate.js::validate  (4 versions)
+    v1       added     src/validate.js:5-12
+    v2       modified  src/validate.js:5-15
+      +  if (x.trim() === '') {
+      +    return false;
+      +  }
+    v3..v4   modified  src/validate.js:5-16
+      +  log('validating input');
+    v5       modified  src/validate.js:5-16
+      -    log('input too long');
+      +    log('input is too long');
+
+between v2 and v3 only:
+  1. 0.7974  src/validate.js:5-16  validate  [2 versions: v2, v3]  showing v3..v4, matched on this version
+  2. 0.7152  src/helpers.js:10-14  checkType  [1 version]  showing v1..v5, matched on this version
+  3. 0.6550  src/io.js:6-10  readInput  [1 version]  showing v1..v5, matched on this version
