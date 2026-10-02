@@ -40,7 +40,7 @@ The benchmark outputs are in `results/ablation/benchmarks/` and the code is stil
 | 2 | BM25, weighted RRF fusion, reranking experiments | Done. Weighted RRF shipped; rerankers evaluated and rejected |
 | 3 | Tree-sitter parsing and call-graph (structural) queries | Done on the sample repositories; separate from the graded evaluation (see "Structural queries") |
 | 4 | Content-addressed incremental re-indexing across versions | Done (see "Versioning (Phase 4)") |
-| 5 | Lineage-aware retrieval across all versions | Stub modules only |
+| 5 | Lineage-aware retrieval across all versions (bonus) | Done (see "Lineage and evolutionary retrieval (Phase 5)") |
 
 ## Structural queries (Phase 3)
 
@@ -53,6 +53,7 @@ Some questions are about code structure, not meaning: "which functions call `nor
 | Definition | `Where is Renderer.draw defined?` | File and line range of the definition |
 | Before | `Which functions call checkType before checkLength?` | Functions where a call to the first appears earlier in the source than a call to the second |
 | Transitive callers | `What directly or indirectly calls log?` | Everything that reaches it through calls, with the call distance |
+| History | `Show the history of validate` | The function's timeline across versions, answered from the versioned index (see "Lineage and evolutionary retrieval"); needs a `VersionedIndex` passed to `answer()` |
 
 Results are functions with file and line, grouped by file.
 
@@ -62,12 +63,12 @@ Run the demo (no model download needed):
 python scripts/demo_structural.py                                        # example questions on both sample repos
 python scripts/demo_structural.py "Which functions call normalize?"      # your own question (JavaScript sample)
 python scripts/demo_structural.py --repo samples/py_repo "who calls check_type"
-python -m unittest discover -s tests -v                                  # 36 tests: 13 structural, 23 versioning
+python -m unittest discover -s tests -v                                  # 64 tests: 13 structural, 23 versioning, 28 lineage
 ```
 
 In code: `from src.pipeline import answer` and `answer(query, db)`, where `db` is a `CallGraphDB` that has run `index_repo(path)`.
 
-**Scope.** This works on the sample repositories (`samples/js_repo`, 10 files and 27 definitions, and `samples/py_repo`, 5 files and 14 definitions), not on the AppsRetrieval evaluation corpus. That corpus is 8,765 standalone competitive-programming solutions written in Python (only 16 of the 8,765 documents contain the JavaScript keyword `function`), with no cross-file structure, so a call-graph question about it would not mean anything. This phase therefore neither affects nor can affect the graded NDCG@10. It is a separate capability, shown in the demo. To check that it cannot interfere with the benchmark, the router was run over all 3,765 test queries: none is routed to the structural engine, with or without the length limit, while all 18 structural control questions route correctly (`results/ablation/structural_router_safety_check.json`, produced by `scripts/check_router_safety.py`).
+**Scope.** This works on the sample repositories (`samples/js_repo`, 10 files and 27 definitions, and `samples/py_repo`, 5 files and 14 definitions), not on the AppsRetrieval evaluation corpus. That corpus is 8,765 standalone competitive-programming solutions written in Python (only 16 of the 8,765 documents contain the JavaScript keyword `function`), with no cross-file structure, so a call-graph question about it would not mean anything. This phase therefore neither affects nor can affect the graded NDCG@10. It is a separate capability, shown in the demo. To check that it cannot interfere with the benchmark, the router was run over all 3,765 test queries: none is routed to the structural engine, with or without the length limit, while all 25 control questions (including the history phrasings, and three that must not route) are classified correctly (`results/ablation/structural_router_safety_check.json`, produced by `scripts/check_router_safety.py`).
 
 **Limits.**
 - Calls are matched by name. Two functions with the same name in different files, or a method and an unrelated function with the same name, are not told apart.
@@ -134,6 +135,75 @@ Files whose bytes are unchanged are not even parsed. Vector ids come from the co
 - Every file is read and hashed on each new version to detect changes (0.4 to 1.6 s for 500 to 2,000 files once the files are cached). Using the file list from `git diff` to skip that read is possible future work and was not built, because encoding, not scanning, dominates.
 - A function that is renamed and edited in one version is a delete plus an add; nothing matches it by similarity.
 - BM25 is rebuilt for each version that is searched (under about 1 s here).
+
+## Lineage and evolutionary retrieval (Phase 5)
+
+When several versions of a codebase are searched at once, near-identical versions of the same function look like separate results and crowd the top of the ranking. Lineage handles this structurally: a **lineage** is the history of one logical function, and results are grouped by it, so each function appears once.
+
+**How lineage is assigned.** Every snippet row in the versioned index (Phase 4) has a `lineage_id`, set when a version is indexed. A new snippet starts its own lineage. A snippet that replaces another at the same place (an edit, including reverting an edit) or is the same code at a new place (a move to another file) inherits that snippet's lineage. A function edited five times across five versions is therefore one lineage, and a revert (A, then B, then A again) is still one. The pairwise old-to-new links from Phase 4 stay in the `lineage` table as an audit trail. A store built before the column existed is migrated when it is opened, and `backfill_lineage()` rebuilds the ids by replaying the versions.
+
+```python
+idx.search("validate the input", k=5, as_of="all")                           # every version at once, grouped by lineage
+idx.search("validate the input", k=5, as_of="all", group_by_lineage=False)   # one result per snippet version (the clutter)
+idx.search("validate the input", k=5, between=("v2", "v4"))                  # snippets valid at some version in v2..v4
+idx.history("validate", with_diffs=True)                                     # one function's timeline
+answer("Show the history of validate", None, versioned_index=idx)            # the same, from a question
+```
+
+- **A grouped result is ranked by its best-matching version but shows the latest version**, and says which one matched, for example `showing v5, matched on the wording of v3` (fields `matched_version`, `matched_differs`; `describe_result()` prints the line). `n_versions` and `versions` list the lineage's versions.
+- **`history(name, file_path=...)`** returns one entry per lineage with, per version: the version range, snippet id, location, line range, and whether it was `added`, `modified`, `moved` or `reverted`, plus an optional unified diff from the previous version.
+- **`between=(first, last)`** keeps snippets valid at some version in that range; `as_of` takes one version or `"all"`; the two cannot be combined.
+- **Routing.** The router sends history questions ("show the history of X", "how has X changed over time", "what changed in X across versions", "all versions of X") to the versioned index.
+
+### Worked example: the committed 5-version fixture
+
+`python scripts/demo_lineage.py` builds `samples/js_repo` (v1) plus the overlays in `samples/js_history` (v2 to v5) into one index with the real model. `validate()` is edited in v2, v3 and v5; `normalize()` is edited in v4 and reverted in v5; `pad()` moves from `format.js` to `helpers.js` in v3; everything else is untouched. For the query "validate the input" over all five versions (dense-only; the raw output is in `results/ablation/lineage_demo_output.txt`):
+
+| Ungrouped top 5 | Score | Grouped by lineage, top 5 | Score |
+|---|---|---|---|
+| `validate` (v3..v4) | 0.7974 | **`validate`** (4 versions), showing v5, matched on the wording of v3 | 0.7974 |
+| `validate` (v5) | 0.7953 | `checkType` | 0.7152 |
+| `validate` (v2) | 0.7801 | `readInput` | 0.6550 |
+| `validate` (v1) | 0.7682 | `<module>` of `validate.js` | 0.6502 |
+| `checkType` | 0.7152 | `tokenize` | 0.6230 |
+
+Four of the five ungrouped slots are versions of one function, so the top 5 holds **2 distinct functions; grouped, it holds 5**. For the query "input too long" the group is shown as v5 but matched on v1's wording, because v1 to v4 say `input too long` and v5 says `input is too long`.
+
+### Scale experiment: how much clutter is there on a larger repository?
+
+`python scripts/experiment_lineage.py` builds a **synthetic** 500-file repository with five versions (real Python solutions from the CoIR `apps` corpus; the folders are a grouping made for the experiment, and the files are standalone scripts, not a real project). 30 "hot" files are edited in 3 to 5 versions, and about 10 other files are edited once in each later version. All five versions index into one store in 103 s (the first version 68 s, each later one 6 to 12 s). It has 852 lineages, of which **785 have one version and only 67, about 8%, have more than one** (35 with two versions, 13 with three, 12 with four, 7 with five). That share bounds how much clutter exists to remove. The 219 queries are real AppsRetrieval test queries whose relevant file is in the repository, taken over all versions with a top 10.
+
+**Primary evidence: redundancy in the top 10**
+
+| | Ungrouped, hybrid (dense-only) | Grouped |
+|---|---|---|
+| Distinct functions in the top 10, mean | 9.28 (9.22) | 10.00 |
+| Slots wasted on extra versions, mean | 0.72 of 10, or 7.2% (0.78, 7.8%) | 0 |
+| Queries with at least one wasted slot | 40.6% (41.1%) | 0 |
+| Queries with three or more wasted slots | 9.6% (9.6%) | 0 |
+
+So grouping removes all of the redundancy, but at this scale there is only a modest amount of it: about 7% of top-10 slots, because only about 8% of the functions have any history and the queries are not aimed at them. The committed-fixture example above shows the strong case, where a query lands on a heavily edited function.
+
+**Coverage guarantee.** Grouping never removed a function that the ungrouped top 10 contained: it dropped 0 of 219 lineages, in both the hybrid and the dense-only runs. This is not just one experiment's result: the test `test_grouping_never_drops_a_lineage_the_ungrouped_top_k_had` asserts it for several queries on the fixture. (Each lineage in an ungrouped top k has a version scoring at least as high as the k-th result, and at most k lineages can do that, so all of them are in the grouped top k, up to ties.)
+
+**Secondary: hit rate (the relevant file appears in the top 10)**
+
+| Queries, of 219 | Ungrouped | Grouped | Latest version only |
+|---|---|---|---|
+| Hybrid | 65 | 69 | 70 |
+| Dense-only | 57 | 57 | 58 |
+
+This is **not an accuracy claim**. The differences are 4 queries (hybrid) and 0 (dense-only) out of 219, which is noise-sized, and grouping frees slots without improving the ranking. Searching only the newest version does about as well as grouped search over all versions; what grouping adds is that older versions stay searchable. The hit rates are also **not comparable to the benchmark figure**: bge-small's Recall@10 on the full 8,765-document benchmark is only about 0.08, and the 26 to 32% here is much higher only because a 500-file subset is a far easier corpus. What this table supports is that grouping loses nothing relative to ungrouped search.
+
+### Limits
+- **A rename, or a rename plus an edit, breaks the chain.** The name is part of the code, so the renamed function is a delete plus an add and starts a new lineage. Matching it to its old self by similarity was considered and deliberately not built.
+- **A function deleted and added back in a later version starts a new lineage**, although its vector is reused (no re-embedding).
+- **Inserting a same-named definition above another one in the same file can misassign the lineage.** Identity uses (file, name, occurrence index), so the new definition takes occurrence 0 and inherits the old function's lineage, while the original code starts a new one.
+- **`vacuum()` removes the stored text of older versions.** History then keeps its metadata (versions, change types) but diffs that involve a vacuumed version are unavailable, and the output says so; vacuumed versions can no longer be searched, and `as_of="all"` means the versions that remain.
+- Lineage is per version store: the call graph of the structural queries is not versioned, so there is no "who called X in v1".
+
+### Router safety, with the history patterns
+The history patterns were added to the same router as the call-graph patterns and the safety check was rerun in full: over all 3,765 AppsRetrieval test queries, **0 are routed away from the semantic path, both as shipped and with the length limit removed**, while all 25 control questions (five new history phrasings, and three that must not route) are classified correctly (`results/ablation/structural_router_safety_check.json`).
 
 ## Presentation
 
@@ -205,7 +275,8 @@ src/
   query/                classify.py (structural vs semantic router, done), expand.py (stub)
   structural/           parse.py (tree-sitter extractors for JavaScript and Python), callgraph.py (SQLite call graph and queries)
   versioning/           diff.py (snippet identity, version diff), index_store.py (SQLite + FAISS incremental index,
-                        search as of a version), embed.py (embedder with call counters); lineage.py (stub, Phase 5)
+                        search as of a version, lineage grouping, history), embed.py (embedder with call counters),
+                        timeline.py (builds a multi-version fixture from overlays), lineage.py (pointer to index_store.py)
   pipeline.py           answer(query, db): routes a question and answers it (structural; semantic path is a hook)
 scripts/
   run_eval.py           MTEB AppsRetrieval evaluation with the shipped pipeline, writes the submission JSON
@@ -213,10 +284,12 @@ scripts/
   build_index.py        builds and saves a FAISS index over sample snippets
   test_phase2_pipeline.py   end-to-end check of the Phase 2 components on sample snippets
   demo_structural.py    structural query demo on the sample repositories
+  demo_lineage.py       ungrouped vs lineage-grouped search on the committed 5-version fixture
+  experiment_lineage.py redundancy of cross-version search on a synthetic 500-file, 5-version repository
   check_router_safety.py  runs the router over the benchmark queries (result in results/ablation/)
   benchmark_reindex.py  full rebuild vs incremental re-index timing on a synthetic repository
-samples/                js_repo and py_repo fixtures for the structural queries
-tests/                  known-answer tests for the structural engine and the versioned index
+samples/                js_repo and py_repo (structural queries), js_history (v2 to v5 overlays for lineage)
+tests/                  known-answer tests: structural engine, versioned index, lineage (64 in all)
 data/                   local data, indexes and the embedding cache (git-ignored)
 results/                appsretrieval_results.json (submission) and ablation/ (per-stage results)
 docs/PROJECT_PLAN.md    architecture and implementation plan

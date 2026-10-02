@@ -299,11 +299,40 @@ section "Versioning (Phase 4)" has the full description and the numbers; the dec
   valid in that version with a FAISS `IDSelector`. This is the filter primitive only; lineage
   grouping and cross-version de-duplication belong to Phase 5.
 
-### Phase 5 — Bonus: evolutionary retrieval
+### Phase 5 — Bonus: evolutionary retrieval (complete)
 15. Implement lineage tracking (chains of `snippet_id`s representing edits to the same
     logical function).
 16. Implement lineage-aware result grouping in the ranking output (avoid near-duplicate
     version clutter in top-k).
+
+**Outcome.** Done per the Phase 5 criterion in section 8: a query against a multi-version corpus
+returns results grouped by lineage, one per function. The README section "Lineage and
+evolutionary retrieval (Phase 5)" has the API, the worked example and the numbers; the decisions are:
+
+- **Lineage** is a `lineage_id` on every snippet row of the Phase 4 store, assigned when a version is
+  indexed: a new snippet starts its own lineage, and an edit (a revert included) or a move inherits
+  its predecessor's. Grouping is then a plain `GROUP BY lineage_id`, with no chain walking, and a
+  revert cycle (A to B to A) cannot loop. The pairwise links of Phase 4 stay as an audit trail.
+  A store built before the column existed is migrated on open and `backfill_lineage()` rebuilds it.
+- **Cross-version search** is `search(query, as_of="all")`. By default each lineage is one result,
+  **ranked by its best-matching version but showing its latest**, and the result says which version
+  matched (`matched_version`, `describe_result()`). `group_by_lineage=False` returns one result per
+  snippet version, `between=(first, last)` restricts the versions searched, and `history(name)`
+  returns a function's timeline with optional diffs between versions.
+- **Router.** History questions ("show the history of X", "how has X changed", "all versions of X")
+  are recognised by the Phase 3 router and answered from the versioned index; over all 3,765
+  AppsRetrieval test queries 0 are routed away from the semantic path, with and without the length
+  gate.
+- **Evidence.** On a synthetic 500-file, 5-version repository, grouping removes the 7.2% of top-10
+  slots that an ungrouped cross-version search spends on extra versions of a function already listed,
+  and drops no lineage (0 of 219 queries). Only about 8% of the lineages have more than one version,
+  which bounds how much clutter there was to remove, so the effect is modest. The hit-rate change is
+  4 of 219 queries (hybrid) and 0 (dense only) and is not an accuracy claim.
+- **Not built, by decision:** matching a renamed function to its old self by similarity.
+- **Known limits** (pinned by tests): a rename or rename plus edit starts a new lineage; so does a
+  function deleted and added back later; inserting a same-named definition above another can give the
+  new one the old lineage; `vacuum()` removes the stored text, so history diffs and searches of
+  vacuumed versions are unavailable.
 
 ### Phase 6 — Packaging for submission
 17. Finalize `README.md` with exact run instructions (must be followable by judges as-is).
