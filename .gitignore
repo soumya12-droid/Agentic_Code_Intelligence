@@ -5,6 +5,12 @@ data/*
 !data/.gitkeep
 *.faiss
 *.index
-results/*.json
 *.pkl
+*.npy
+*.db
 .cache/
+# Top-level result files are ignored so a stray one is not committed by accident; the submission file
+# is tracked explicitly. results/ablation/ is deliberately NOT ignored: it holds the committed evidence,
+# and the scripts that write there overwrite it (see the README), so a re-run shows up as a modified
+# tracked file instead of silently disappearing.
+results/*.json

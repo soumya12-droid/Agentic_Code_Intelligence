@@ -1,20 +1,24 @@
-# Shipped pipeline: dense (bge-small-en-v1.5) + BM25 + weighted RRF
-mteb>=2.21,<3
-sentence-transformers>=5.0,<6
-torch>=2.4
-transformers>=4.44,<5   # jina-v2-code remote code breaks on transformers 5.x
-faiss-cpu>=1.13
-numpy>=2.0
-# only needed for the optional jina-embeddings-v2-base-code model (default is bge-small-en-v1.5):
-einops>=0.8
+# Exact versions validated for this project (Python 3.13.7, Windows); the results in this repository
+# were produced with them. numpy 2.5.x needs Python 3.12 or newer.
+#
+# A cold-clone audit that resolved the earlier, looser bounds got mteb 2.22.2 and torch 2.14.1 and reproduced
+# the submission with identical scores (all 149 numeric test-split scores), so a slightly different
+# environment is not necessarily a problem. The versions below are the ones to ship.
+# (sqlite3 is part of the Python standard library.)
 
-# BM25 (cross-encoder reranker code uses sentence-transformers above; evaluated, not shipped)
+# Retrieval pipeline and evaluation: dense + BM25 + weighted RRF
+mteb==2.21.10
+sentence-transformers==5.7.0
+torch==2.14.0
+transformers==4.57.6      # must stay below 5: jina-embeddings-v2-base-code's remote code does not load on 5.x
+faiss-cpu==1.15.1
+numpy==2.5.3
 rank-bm25==0.2.2
 
-# Phase 3/4 (structural + versioning)
-tree-sitter>=0.25
-tree-sitter-javascript>=0.25
-tree-sitter-python>=0.25
+# Structural queries and versioning: tree-sitter extractors
+tree-sitter==0.26.0
+tree-sitter-javascript==0.25.0
+tree-sitter-python==0.25.0
 
-# Later phases, not needed yet:
-# (sqlite3 is stdlib)
+# Only needed for the optional jina-embeddings-v2-base-code model
+einops==0.8.2
