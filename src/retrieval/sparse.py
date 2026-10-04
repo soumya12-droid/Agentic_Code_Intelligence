@@ -91,20 +91,3 @@ class BM25Index:
         obj.ids, obj.bm25 = state["ids"], state["bm25"]
         obj._build_postings()
         return obj
-
-
-if __name__ == "__main__":
-    import sys, tempfile, os
-    from pathlib import Path
-    sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-    from scripts.build_index import SAMPLE_SNIPPETS, snippet_id
-
-    corpus = [{"id": snippet_id(s), "text": s} for s in SAMPLE_SNIPPETS]
-    idx = BM25Index(); idx.build(corpus)
-    p = os.path.join(tempfile.mkdtemp(), "bm25.pkl"); idx.save(p)
-    idx = BM25Index.load(p)
-    by_id = {d["id"]: d["text"] for d in corpus}
-    for q in ["validate input type check", "fetch json from url", "sum of array"]:
-        print(q)
-        for i, s in idx.search(q, 3):
-            print(f"  {s:.3f}  {by_id[i][:70]}")

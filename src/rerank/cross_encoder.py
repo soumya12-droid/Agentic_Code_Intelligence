@@ -1,30 +1,24 @@
-"""Cross-encoder reranker (Phase 2 — see docs/PROJECT_PLAN.md section 3.1/5/7)."""
-from __future__ import annotations
+"""Cross-encoder reranker (Phase 2 — see docs/PROJECT_PLAN.md section 3.1/5/7).
 
-import logging
+Evaluated but not part of the shipped pipeline: see the README ("Evaluated but not used").
+"""
+from __future__ import annotations
 
 from sentence_transformers import CrossEncoder
 
-logger = logging.getLogger(__name__)
-
-# MiniLM is the shipped reranker. BAAI/bge-reranker-base was benchmarked but is too slow on
-# CPU for the full split (about 11 s/query at 20 candidates); select it with model_name.
-PRIMARY_MODEL = "cross-encoder/ms-marco-MiniLM-L-6-v2"
-FALLBACK_MODEL = "cross-encoder/ms-marco-MiniLM-L-6-v2"
+# ms-marco MiniLM is the default (it was the only reranker fast enough to run on the full split).
+# BAAI/bge-reranker-base was benchmarked but is too slow on CPU for the full split (about 11 s/query
+# at 20 candidates); select it with model_name. There is no fallback model: if the requested model
+# cannot be loaded, the error is raised.
+DEFAULT_MODEL = "cross-encoder/ms-marco-MiniLM-L-6-v2"
 
 
 class CrossEncoderReranker:
-    def __init__(self, model_name: str = PRIMARY_MODEL, max_length: int = 512,
+    def __init__(self, model_name: str = DEFAULT_MODEL, max_length: int = 512,
                  batch_size: int = 16, device: str = "cpu"):
         self.batch_size = batch_size
-        try:
-            self.model = CrossEncoder(model_name, max_length=max_length, device=device)
-            self.model_name = model_name
-        except Exception as e:
-            logger.warning("Failed to load %s (%s: %s); falling back to %s",
-                           model_name, type(e).__name__, e, FALLBACK_MODEL)
-            self.model = CrossEncoder(FALLBACK_MODEL, max_length=max_length, device=device)
-            self.model_name = FALLBACK_MODEL
+        self.model = CrossEncoder(model_name, max_length=max_length, device=device)
+        self.model_name = model_name
 
     def rerank(self, query: str, candidates: list[dict], top_k: int = 10) -> list[dict]:
         """candidates: dicts with at least {"id", "text"}. Returns the top_k, reordered

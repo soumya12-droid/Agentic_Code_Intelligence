@@ -19,7 +19,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from src.versioning.diff import Snippet, diff_snippets, extract_snippets  # noqa: E402
-from src.versioning.index_store import VersionedIndex, vector_id  # noqa: E402
+from src.versioning.index_store import VersionedIndex  # noqa: E402
 
 
 class FakeEmbedder:

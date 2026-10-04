@@ -22,6 +22,8 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 import mteb  # noqa: E402
+# NOTE: a private mteb module (its metric code, so scores match the library's own exactly). It is an
+# internal API and could move or change in a future mteb version; mteb is pinned in requirements.txt.
 from mteb._evaluators.retrieval_metrics import calculate_retrieval_scores, mrr  # noqa: E402
 
 from src.mteb_encoder import PrePostPipelineEncoder  # noqa: E402

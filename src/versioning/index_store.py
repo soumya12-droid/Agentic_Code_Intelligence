@@ -35,8 +35,6 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 
-import numpy as np
-
 from src.retrieval.dense import DenseIndex
 from src.retrieval.fusion import fuse
 from src.retrieval.sparse import BM25Index

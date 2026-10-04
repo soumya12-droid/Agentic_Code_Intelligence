@@ -34,9 +34,9 @@ from src.retrieval.sparse import BM25Index
 logger = logging.getLogger(__name__)
 
 # bge-small is the default: jina-embeddings-v2-base-code (pass it via model_name) was
-# too slow on CPU for the full AppsRetrieval run.
-PRIMARY_MODEL = "BAAI/bge-small-en-v1.5"
-FALLBACK_MODEL = "BAAI/bge-small-en-v1.5"
+# too slow on CPU for the full AppsRetrieval run. There is no fallback model: if the requested
+# model cannot be loaded, the error is raised.
+DEFAULT_MODEL = "BAAI/bge-small-en-v1.5"
 BGE_QUERY_PREFIX = "Represent this sentence for searching relevant passages: "
 MODES = ("dense", "bm25", "rrf", "rerank")
 CACHE_DIR = Path(__file__).resolve().parents[1] / "data" / "emb_cache"
@@ -44,7 +44,7 @@ RERANK_OFFSET = 1000.0  # keeps reranked candidates above the un-reranked tail
 
 
 class PrePostPipelineEncoder(AbsEncoder):
-    def __init__(self, model_name: str = PRIMARY_MODEL, max_seq_length: int = 512,
+    def __init__(self, model_name: str = DEFAULT_MODEL, max_seq_length: int = 512,
                  batch_size: int = 64, device: str = "cpu", mode: str = "rrf",
                  candidates: int = 100, rrf_k: int = 60, bm25_weight: float = 0.3,
                  rerank_top_m: int = 20,
@@ -68,13 +68,7 @@ class PrePostPipelineEncoder(AbsEncoder):
         self.reranker = None
         self.model_name = model_name
         if mode != "bm25":
-            try:
-                self.model = SentenceTransformer(model_name, trust_remote_code=True, device=device)
-            except Exception as e:  # download/remote-code/dependency failure
-                logger.warning("Failed to load %s (%s: %s); falling back to %s",
-                               model_name, type(e).__name__, e, FALLBACK_MODEL)
-                self.model = SentenceTransformer(FALLBACK_MODEL, device=device)
-                self.model_name = FALLBACK_MODEL
+            self.model = SentenceTransformer(model_name, trust_remote_code=True, device=device)
             self.model.max_seq_length = max_seq_length
         if mode == "rerank":
             from src.rerank.cross_encoder import CrossEncoderReranker
