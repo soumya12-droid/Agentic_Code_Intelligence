@@ -2,6 +2,86 @@
 
 Given a natural-language query and a library of code snippets, this project returns a **ranking** of the snippets by relevance to the query. For example, for "How is the input preprocessed before going to the main function?" a `normalize()` function should rank above an unrelated `perf()` helper. This is a retrieval and ranking problem, not a generation problem: the system does not write answers or explanations. It has to run on CPU and scale to thousands of, possibly long, snippets, so the whole codebase can never be put in a language-model prompt. The goals, in priority order, are (P0) retrieval accuracy, measured by NDCG@10 and MRR on the test split of the CoIR `apps` dataset through the MTEB library; (P1) re-indexing a new version of a codebase quickly instead of rebuilding from scratch; and (Bonus) retrieving across all versions of the code without near-duplicate versions crowding the results.
 
+## Presentation
+
+The project presentation is in the repository root: [VIT_Vellore_Shard_Submission.pptx](VIT_Vellore_Shard_Submission.pptx).
+
+## Setup
+
+Requires **Python 3.12 or newer** (the pinned numpy 2.5 needs it; developed and validated on 3.13.7) and an internet connection for the first run, which downloads the embedding model and the `apps` dataset from the Hugging Face Hub (about 176 MB).
+
+```bash
+python -m venv .venv
+# Windows:     .venv\Scripts\activate
+# Linux/macOS: source .venv/bin/activate
+pip install -r requirements.txt
+```
+
+**The install takes a while:** about 13.5 minutes on a cold pip cache (measured), because it downloads PyTorch and 70 or so other packages.
+
+Environment notes:
+
+- The embedding model is `BAAI/bge-small-en-v1.5`. Queries are encoded with the recommended instruction prefix; documents are not.
+- `jinaai/jina-embeddings-v2-base-code` can still be used with `--model`, but it was far too slow on CPU for the full evaluation (over two hours without finishing on our machine), so no reported result uses it. If you use it, `transformers` must stay below version 5: the custom model code fails to import on 5.x (`find_pruneable_heads_and_indices`). `requirements.txt` pins exact versions (`transformers` 4.57.6, `sentence-transformers` 5.7.0, ...), and `einops` is needed only for jina.
+- The model and pipeline stage actually used are printed at the start of a run. There is no fallback model: if a model cannot be loaded, the error is raised.
+- `requirements.txt` pins the versions the results were produced with. A cold-clone audit that installed `mteb` 2.22.2 and `torch` 2.14.1 instead (the older requirements only set lower bounds) got identical scores, so a slightly different environment is not necessarily a problem.
+- Dense embeddings are cached in `data/emb_cache/` (git-ignored) so that repeated runs and the ablation stages do not re-encode the corpus.
+- On Windows you may see warnings about Hugging Face cache symlinks. They are harmless.
+
+## Reproducing the MTEB evaluation
+
+```bash
+python scripts/run_eval.py
+```
+
+This runs the MTEB `AppsRetrieval` task on its test split with the shipped pipeline and writes `results/appsretrieval_results.json`, **overwriting the committed submission file by design** (use `--out` to write elsewhere), following the submission snippet in the hackathon guidelines. The script prints NDCG@10, MRR@10, MAP@10, Recall@10 and Recall@100 at the end. Options: `--mode` (`dense`, `bm25`, `rrf`, `rerank`; default `rrf`), `--bm25-weight` (default 0.3), `--model`, `--max-seq-length` (default 512), `--batch-size` (default 64) and `--out`.
+
+**Expected time, end to end: about 40 to 45 minutes (an estimate)** from a clean checkout: about 13.5 minutes to install (measured), a few minutes to download the model and dataset (176 MB), and about 22 to 30 minutes of encoding. The one cold-clone run took longer in wall-clock terms because the laptop slept during it (`docs/REPRODUCIBILITY_AUDIT.md`), so the total is not a clean measurement.
+
+**Encoding alone** (the figure to compare with the table of results) takes about 22 minutes on a 14-core, 18-thread Windows laptop, almost all of it encoding the corpus (about 12 minutes) and the queries (about 10 minutes) with `bge-small-en-v1.5`. A re-run with the embedding cache takes about a minute and a half. The queries are long problem statements (mean about 500 tokens), so queries are the costly part. A progress bar is shown while encoding.
+
+To reproduce each row of the ablation table:
+
+```bash
+python scripts/run_phase2_eval.py --mode dense
+python scripts/run_phase2_eval.py --mode bm25
+python scripts/run_phase2_eval.py --mode rrf                         # equal weights
+python scripts/run_phase2_eval.py --mode rrf --bm25-weight 0.3 --name rrf_w0.3
+python scripts/run_phase2_eval.py --mode rerank --bm25-weight 0.3 --rerank-top-m 15 \
+    --reranker cross-encoder/ms-marco-MiniLM-L-6-v2 --name rerank_minilm_m15   # about 2 hours
+```
+
+Each writes its result, per-query scores and timing to `results/ablation/`.
+
+### Reproducibility
+
+This was independently reproduced from a cold clone (a fresh clone, a new virtual environment, an empty model cache) using newer dependency versions than the ones pinned (`mteb` 2.22.2 and `torch` 2.14.1, against 2.21.10 and 2.14.0): all 149 numeric test-split scores in the results JSON were identical (NDCG@10 0.05968, MRR@10 0.05088). Procedure, versions and timings are in [docs/REPRODUCIBILITY_AUDIT.md](docs/REPRODUCIBILITY_AUDIT.md).
+
+### Other commands, their run times, and what they write
+
+| Command | Needs the model? | Takes | Writes |
+|---|---|---|---|
+| `python -m unittest discover -s tests -v` | no | about 6 s | nothing |
+| `python scripts/demo_structural.py` | no | seconds | nothing |
+| `python scripts/demo_lineage.py` | yes (bge-small) | about 45 s | nothing |
+| `python scripts/build_index.py` | yes | about 1 min | `data/sample.faiss` (ignored by git) |
+| `python scripts/test_phase2_pipeline.py` | yes, and it downloads the MiniLM reranker | 1 to 2 min | nothing |
+| `python scripts/check_router_safety.py` | no (loads the dataset) | about a minute | **overwrites** `results/ablation/structural_router_safety_check.json` (no `--out` option) |
+| `python scripts/run_phase2_eval.py --mode ...` | yes | about 22 min for the first dense run, then seconds to 2 minutes with the embedding cache; the reranker run about 2 hours | writes `results/ablation/<name>*.json`, **overwriting** files of the same name (`--name`, `--out-dir`) |
+| `python scripts/benchmark_reindex.py` | yes | about 30 to 35 minutes | **overwrites** `results/ablation/versioning_benchmark.json` (use `--out`); the timings vary with machine load |
+| `python scripts/experiment_lineage.py` | yes | about 6 minutes | **overwrites** `results/ablation/lineage_experiment.json` (use `--out`) |
+
+Everything under `results/ablation/` is tracked on purpose: it is the evidence behind the tables in this README. A script that rewrites one of those files shows up in `git status` as a modified file, so pass `--out` or `--out-dir` to keep the committed evidence untouched.
+
+Note: MTEB 2.x stores a `datetime` in the task result, which the plain `json.dump(task_result.to_dict(), ...)` from the guidelines cannot serialise. The scripts convert it to a timestamp, as MTEB's own `to_disk` does.
+
+Quick smoke tests that finish in seconds to a couple of minutes:
+
+```bash
+python scripts/build_index.py            # embeds 5 sample JS snippets, saves data/sample.faiss, runs one query
+python scripts/test_phase2_pipeline.py   # dense + BM25 -> RRF -> cross-encoder on the same 5 snippets
+```
+
 ## Results (CoIR `apps` test split, 3,765 queries, 8,765 documents)
 
 The shipped pipeline is **dense retrieval (bge-small-en-v1.5) plus BM25, fused with weighted Reciprocal Rank Fusion (dense weight 1.0, BM25 weight 0.3). No reranker is used.**
@@ -63,7 +143,7 @@ Run the demo (no model download needed):
 python scripts/demo_structural.py                                        # example questions on both sample repos
 python scripts/demo_structural.py "Which functions call normalize?"      # your own question (JavaScript sample)
 python scripts/demo_structural.py --repo samples/py_repo "who calls check_type"
-python -m unittest discover -s tests -v                                  # 64 tests: 13 structural, 23 versioning, 28 lineage
+python -m unittest discover -s tests -v                                  # 73 tests: 13 structural, 23 versioning, 28 lineage, 9 retrieval
 ```
 
 In code: `from src.pipeline import answer` and `answer(query, db)`, where `db` is a `CallGraphDB` that has run `index_repo(path)`.
@@ -205,61 +285,6 @@ This is **not an accuracy claim**. The differences are 4 queries (hybrid) and 0 
 ### Router safety, with the history patterns
 The history patterns were added to the same router as the call-graph patterns and the safety check was rerun in full: over all 3,765 AppsRetrieval test queries, **0 are routed away from the semantic path, both as shipped and with the length limit removed**, while all 25 control questions (five new history phrasings, and three that must not route) are classified correctly (`results/ablation/structural_router_safety_check.json`).
 
-## Presentation
-
-The project presentation is in the repository root: [VIT_Vellore_Shard_Submission.pptx](VIT_Vellore_Shard_Submission.pptx).
-
-## Setup
-
-Requires Python 3.10 or newer (developed on 3.13) and an internet connection for the first run, which downloads the embedding model and the `apps` dataset from the Hugging Face Hub.
-
-```bash
-python -m venv .venv
-# Windows:     .venv\Scripts\activate
-# Linux/macOS: source .venv/bin/activate
-pip install -r requirements.txt
-```
-
-Environment notes:
-
-- The embedding model is `BAAI/bge-small-en-v1.5`. Queries are encoded with the recommended instruction prefix; documents are not.
-- `jinaai/jina-embeddings-v2-base-code` can still be used with `--model`, but it was far too slow on CPU for the full evaluation (over two hours without finishing on our machine), so no reported result uses it. If you use it, `transformers` must stay below version 5: the custom model code fails to import on 5.x (`find_pruneable_heads_and_indices`). `requirements.txt` pins `transformers>=4.44,<5` and `sentence-transformers>=5,<6`, and `einops` is needed only for jina.
-- The model and pipeline stage actually used are printed at the start of a run.
-- Dense embeddings are cached in `data/emb_cache/` (git-ignored) so that repeated runs and the ablation stages do not re-encode the corpus.
-- On Windows you may see warnings about Hugging Face cache symlinks. They are harmless.
-
-## Reproducing the MTEB evaluation
-
-```bash
-python scripts/run_eval.py
-```
-
-This runs the MTEB `AppsRetrieval` task on its test split with the shipped pipeline and writes `results/appsretrieval_results.json`, following the submission snippet in the hackathon guidelines. The script prints NDCG@10, MRR@10, MAP@10, Recall@10 and Recall@100 at the end. Options: `--mode` (`dense`, `bm25`, `rrf`, `rerank`; default `rrf`), `--bm25-weight` (default 0.3), `--model`, `--max-seq-length` (default 512), `--batch-size` (default 64) and `--out`.
-
-**Expected run time on CPU:** about 22 minutes on a 14-core, 18-thread Windows laptop, almost all of it encoding the corpus (about 12 minutes) and the queries (about 10 minutes) with `bge-small-en-v1.5`. A re-run with the embedding cache takes about a minute and a half. The queries are long problem statements (mean about 500 tokens), so queries are the costly part. A progress bar is shown while encoding.
-
-To reproduce each row of the ablation table:
-
-```bash
-python scripts/run_phase2_eval.py --mode dense
-python scripts/run_phase2_eval.py --mode bm25
-python scripts/run_phase2_eval.py --mode rrf                         # equal weights
-python scripts/run_phase2_eval.py --mode rrf --bm25-weight 0.3 --name rrf_w0.3
-python scripts/run_phase2_eval.py --mode rerank --bm25-weight 0.3 --rerank-top-m 15 \
-    --reranker cross-encoder/ms-marco-MiniLM-L-6-v2 --name rerank_minilm_m15   # about 2 hours
-```
-
-Each writes its result, per-query scores and timing to `results/ablation/`.
-
-Note: MTEB 2.x stores a `datetime` in the task result, which the plain `json.dump(task_result.to_dict(), ...)` from the guidelines cannot serialise. The scripts convert it to a timestamp, as MTEB's own `to_disk` does.
-
-Quick smoke tests that finish in seconds to a couple of minutes:
-
-```bash
-python scripts/build_index.py            # embeds 5 sample JS snippets, saves data/sample.faiss, runs one query
-python scripts/test_phase2_pipeline.py   # dense + BM25 -> RRF -> cross-encoder on the same 5 snippets
-```
-
 ## Project structure
 
 ```
@@ -272,7 +297,7 @@ src/
     fusion.py           weighted Reciprocal Rank Fusion
   rerank/
     cross_encoder.py    cross-encoder reranker wrapper (evaluated, not in the shipped pipeline)
-  query/                classify.py (structural vs semantic router, done), expand.py (stub)
+  query/                classify.py (routes a question to the structural engine, the version history, or semantic search)
   structural/           parse.py (tree-sitter extractors for JavaScript and Python), callgraph.py (SQLite call graph and queries)
   versioning/           diff.py (snippet identity, version diff), index_store.py (SQLite + FAISS incremental index,
                         search as of a version, lineage grouping, history), embed.py (embedder with call counters),
@@ -289,10 +314,11 @@ scripts/
   check_router_safety.py  runs the router over the benchmark queries (result in results/ablation/)
   benchmark_reindex.py  full rebuild vs incremental re-index timing on a synthetic repository
 samples/                js_repo and py_repo (structural queries), js_history (v2 to v5 overlays for lineage)
-tests/                  known-answer tests: structural engine, versioned index, lineage (64 in all)
+tests/                  known-answer tests: structural engine, versioned index, lineage, fusion and BM25 (73 in all)
 data/                   local data, indexes and the embedding cache (git-ignored)
 results/                appsretrieval_results.json (submission) and ablation/ (per-stage results)
 docs/PROJECT_PLAN.md    architecture and implementation plan
+docs/REPRODUCIBILITY_AUDIT.md   cold-clone reproduction of the submission: procedure, versions, timings
 ```
 
 ## Tech stack
@@ -305,7 +331,7 @@ docs/PROJECT_PLAN.md    architecture and implementation plan
 | Fusion | Weighted Reciprocal Rank Fusion, hand-written (dense 1.0, BM25 0.3) | Simple, standard way to combine rankings; weighting stops the weak BM25 signal from hurting the dense ranking |
 | Reranker | None in the shipped pipeline | `bge-reranker-base` was too slow on CPU and `ms-marco-MiniLM-L-6-v2` lowered NDCG@10; see "Evaluated but not used" |
 | Code parsing | `tree-sitter` with the JavaScript and Python grammars | Function-level extraction and call graphs for structural queries; also the basis for snippet hashing in the versioning phase |
-| Metadata | SQLite | Call graph and snippet metadata today; version bookkeeping planned |
+| Metadata | SQLite | Call graph, snippet metadata, version ranges and lineage |
 | Evaluation | `mteb`, `AppsRetrieval` task | Required submission format |
 
 The pipeline is plain Python with no orchestration framework.

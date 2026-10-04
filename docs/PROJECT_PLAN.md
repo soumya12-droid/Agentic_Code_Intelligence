@@ -59,7 +59,7 @@ Query
   - Classify: semantic query vs structural query
   - Semantic: "how is X validated" → goes to hybrid retrieval
   - Structural: "which files call X before Y" → goes to AST/call-graph engine directly
-  - Optional: LLM-based query expansion/paraphrase for recall
+  - Optional: LLM-based query expansion/paraphrase for recall (not built; see the Phase 2 note below)
   │
   ▼
 [Stage 2: Candidate Retrieval — recall-focused, cheap]
@@ -187,8 +187,7 @@ properly" — solved structurally, not via a post-hoc similarity filter.
 ├── requirements.txt
 ├── src/
 │   ├── query/
-│   │   ├── classify.py            # semantic vs structural routing
-│   │   └── expand.py              # query expansion/paraphrase (optional LLM step)
+│   │   └── classify.py            # semantic vs structural routing (and version-history questions)
 │   ├── retrieval/
 │   │   ├── dense.py                # embedding + FAISS interface
 │   │   ├── sparse.py               # BM25 interface
@@ -228,7 +227,9 @@ properly" — solved structurally, not via a post-hoc similarity filter.
 4. Add BM25 sparse retrieval + RRF fusion → re-measure.
 5. Add cross-encoder reranker over fused top-k → re-measure. (Outcome: not shipped; see the
    tech stack table. Measured: dense 0.0564, weighted RRF 0.0597, + MiniLM rerank 0.0528 NDCG@10.)
-6. Add query classification/routing (semantic vs structural) + expansion → re-measure.
+6. Add query classification/routing (semantic vs structural) + expansion → re-measure. (Routing was built
+   in Phase 3. Query expansion was not built: the placeholder `src/query/expand.py` was removed rather than
+   left as a stub.)
 7. Record ablation results at each step (dense-only → +BM25 → +rerank → +routing) for
    the PPT/demo — this is a differentiator, not optional polish.
 
